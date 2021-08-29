@@ -67,12 +67,14 @@
 
 ### Proof-of-Concept
 
-* UDP peer-to-peer NAT traversal
-* Object Shadow Casting w/ soft & hard edges
-* Cloud lighting
-* Partial Terrain Rendering
-* zone simulation
-* view simulation
-    * relative coords
-    * view id mapping
-    * object visibility (cloud, lighting, emit)
+* simulation
+    * UDP peer-to-peer NAT traversal
+    * zone simulation
+    * view simulation
+        * relative coords
+        * view id mapping
+        * object visibility (cloud, lighting, emit)
+* rendering
+    * Object Shadow Casting w/ soft & hard edges
+    * Cloud lighting
+    * Partial Terrain Rendering

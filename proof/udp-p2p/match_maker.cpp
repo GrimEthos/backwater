@@ -6,6 +6,7 @@
 #include <cpp/Program.h>
 #include <async/TcpServer.h>
 
+const char * wanAddress = "home.grimethos.com";
 
 struct Node
 {
@@ -13,7 +14,22 @@ struct Node
     std::string name;
     std::string intAddr;
     std::string extAddr;
+    std::string p2pAddr;
 };
+
+
+cpp::Memory addressIpOf( cpp::Memory addr )
+{
+    auto pos = addr.findLastOf( ":" );
+    return addr.substr( 0, pos );
+}
+
+
+cpp::Memory addressPortOf( cpp::Memory addr )
+{
+    auto pos = addr.findLastOf( ":" );
+    return addr.substr( pos + 1 );
+}
 
 
 class MatchMaker
@@ -28,8 +44,13 @@ private:
 
     void add( const std::string & addr, cpp::Memory msg );
     void remove( const std::string & addr );
+
+    static cpp::Memory ipOf( cpp::Memory addr );
+    static cpp::Memory portOf( cpp::Memory addr );
+
 private:
     cpp::TcpServer m_server;
+    std::string m_wanIp;
     int m_nextId = 1;
     std::map<int, Node> m_nodes;
     std::map<std::string, int> m_addrNodes;
@@ -61,12 +82,14 @@ int main( int argc, const char ** argv )
 
 MatchMaker::MatchMaker( cpp::AsyncIO & io, int port )
 {
+    m_wanIp = cpp::TcpServer::resolve( cpp::TcpVersion::v4, wanAddress );
+
     using namespace std::placeholders;
     m_server.open( io, 7654, 
         std::bind( &MatchMaker::onConnect, this, _1, _2 ),
         std::bind( &MatchMaker::onRecv, this, _1, _2 ),
         std::bind( &MatchMaker::onDisconnect, this, _1, _2 ), 
-        "localhost", cpp::TcpVersion::v4 );
+        "0.0.0.0", cpp::TcpVersion::v4 );
 }
 
 
@@ -108,7 +131,7 @@ void MatchMaker::onDisconnect( const std::string & addr, std::error_code reason 
 void MatchMaker::add( const std::string & addr, cpp::Memory msg )
 {
     auto parts = msg.split( " " );
-    if ( parts.size( ) != 3 )
+    if ( parts.size( ) != 4 )
     { 
         m_server.send( addr, "add : invalid args\n\n" );
         m_server.disconnect( addr, std::make_error_code( std::errc::bad_message ) );
@@ -124,6 +147,8 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
     node.name = parts[1];
     node.extAddr = addr;
     node.intAddr = parts[2];
+    node.p2pAddr = parts[3];
+
 
     m_server.send( addr, "add : ok\n\n" );
 
@@ -131,26 +156,43 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
     {
         auto & otherNode = itr.second;
         if ( otherNode.id == nodeId )
-        { continue; }
+            { continue; }
 
-        m_server.send( addr, std::format( "connect {} {} {} {}\n\n",
+        bool isWan = addressIpOf( node.extAddr ) != addressIpOf( otherNode.extAddr );
+
+        std::string p2pAddr = isWan
+            ? addressIpOf( otherNode.extAddr ) 
+            : addressIpOf( otherNode.intAddr );
+        if ( isWan && otherNode.extAddr == otherNode.intAddr )
+            { p2pAddr = m_wanIp; }
+
+        m_server.send( addr, std::format( "connect {} {} {} {} {}\n\n",
             otherNode.id,
             otherNode.name,
             otherNode.intAddr,
-            otherNode.extAddr ) );
+            otherNode.extAddr,
+            p2pAddr + ":" + addressPortOf( otherNode.p2pAddr ) ) );
 
-        m_server.send( otherNode.extAddr, std::format( "connect {} {} {} {}\n\n",
+        p2pAddr = isWan
+            ? addressIpOf( node.extAddr )
+            : addressIpOf( node.intAddr );
+        if ( isWan && node.extAddr == node.intAddr )
+            { p2pAddr = m_wanIp; }
+
+        m_server.send( otherNode.extAddr, std::format( "connect {} {} {} {} {}\n\n",
             node.id,
             node.name,
             node.intAddr,
-            node.extAddr ) );
+            node.extAddr,
+            p2pAddr + ":" + addressPortOf( node.p2pAddr ) ) );
     }
 
-    cpp::Log::info( std::format( "add node: {} {} {} {}\n",
+    cpp::Log::info( std::format( "add node: {} {} {} {} {}\n",
         node.id,
         node.name,
         node.extAddr,
-        node.intAddr ) );
+        node.intAddr,
+        node.p2pAddr ) );
 }
 
 
@@ -167,12 +209,15 @@ void MatchMaker::remove( const std::string & addr )
     }
 
     auto & node = m_nodes[nodeId];
-    cpp::Log::info( std::format( "remove node: {} {} {} {}\n",
+    cpp::Log::info( std::format( "remove node: {} {} {} {} {}\n",
         node.id,
         node.name,
         node.extAddr,
-        node.intAddr ) );
+        node.intAddr,
+        node.p2pAddr ) );
 
     m_nodes.erase( nodeId );
     m_addrNodes.erase( addr );
 }
+
+
