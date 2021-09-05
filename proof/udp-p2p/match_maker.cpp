@@ -158,12 +158,18 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
         if ( otherNode.id == nodeId )
             { continue; }
 
-        bool isWan = addressIpOf( node.extAddr ) != addressIpOf( otherNode.extAddr );
+        bool isServerLan[2] = 
+        {
+            addressIpOf( node.extAddr ) == addressIpOf( node.intAddr ),
+            addressIpOf( otherNode.extAddr ) == addressIpOf( otherNode.intAddr ),
+        };
+        bool isSameLan = ( isServerLan[0] == isServerLan[1] ) || addressIpOf( node.extAddr ) == addressIpOf( otherNode.extAddr );
 
-        std::string p2pAddr = isWan
-            ? addressIpOf( otherNode.extAddr ) 
-            : addressIpOf( otherNode.intAddr );
-        if ( isWan && otherNode.extAddr == otherNode.intAddr )
+        std::string p2pAddr = ( isServerLan[1] || isSameLan )
+            ? addressIpOf( otherNode.intAddr ) 
+            : addressIpOf( otherNode.extAddr );
+
+        if ( isServerLan[1] && !isSameLan )
             { p2pAddr = m_wanIp; }
 
         m_server.send( addr, std::format( "connect {} {} {} {} {}\n\n",
@@ -173,10 +179,11 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
             otherNode.extAddr,
             p2pAddr + ":" + addressPortOf( otherNode.p2pAddr ) ) );
 
-        p2pAddr = isWan
-            ? addressIpOf( node.extAddr )
-            : addressIpOf( node.intAddr );
-        if ( isWan && node.extAddr == node.intAddr )
+        p2pAddr = ( isServerLan[0] || isSameLan )
+            ? addressIpOf( node.intAddr )
+            : addressIpOf( node.extAddr );
+
+        if ( isServerLan[0] && !isSameLan )
             { p2pAddr = m_wanIp; }
 
         m_server.send( otherNode.extAddr, std::format( "connect {} {} {} {} {}\n\n",

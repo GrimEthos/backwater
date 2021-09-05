@@ -2,6 +2,12 @@
 
 ## Game Play
 
+### Overview
+
+
+
+## Game Data
+
 ### Data Entities
 
 * Galaxy - top level entity that manages all game data
@@ -67,14 +73,9 @@
 
 ### Proof-of-Concept
 
-* simulation
-    * UDP peer-to-peer NAT traversal
-    * zone simulation
-    * view simulation
-        * relative coords
-        * view id mapping
-        * object visibility (cloud, lighting, emit)
-* rendering
-    * Object Shadow Casting w/ soft & hard edges
-    * Cloud lighting
-    * Partial Terrain Rendering
+- [x] simulation: UDP peer-to-peer NAT traversal
+- [ ] simulation: zone server : multi-zone simulation using physics engine
+- [ ] simulation: view simulation : relative coords and ids, object visibility (cloud, lighting, emit)
+- [ ] rendering: Object Shadow Casting w/ soft & hard edges
+- [ ] rendering: Cloud lighting
+- [ ] rendering: Partial Terrain Rendering (large asteroid edges)
