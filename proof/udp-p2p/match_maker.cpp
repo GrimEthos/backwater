@@ -6,7 +6,9 @@
 #include <cpp/Program.h>
 #include <async/TcpServer.h>
 
-const char * wanAddress = "home.grimethos.com";
+#include <cpp/detail/cpp-win32.h>
+#define ASIO_STANDALONE
+#include <async/lib/asio-1.18.0/include/asio.hpp>
 
 struct Node
 {
@@ -15,6 +17,7 @@ struct Node
     std::string intAddr;
     std::string extAddr;
     std::string p2pAddr;
+    bool isLocal;
 };
 
 
@@ -35,7 +38,7 @@ cpp::Memory addressPortOf( cpp::Memory addr )
 class MatchMaker
 {
 public:
-    MatchMaker( cpp::AsyncIO & io, int port );
+    MatchMaker( cpp::AsyncIO & io, int port, std::string lanSubnet, std::string wanAddress );
 
 private:
     void onConnect( std::error_code acceptError, const std::string & addr );
@@ -51,6 +54,7 @@ private:
 private:
     cpp::TcpServer m_server;
     std::string m_wanIp;
+    std::string m_lanSubnet;
     int m_nextId = 1;
     std::map<int, Node> m_nodes;
     std::map<std::string, int> m_addrNodes;
@@ -67,8 +71,11 @@ int main( int argc, const char ** argv )
         cpp::Log::addConsoleHandler( );
         cpp::Log::addDebuggerHandler( );
 
+        const char * wanAddress = "home.grimethos.com";
+        const char * lanSubnet = "192.168.0.0/16";
+
         cpp::AsyncIO io;
-        auto matchMaker = MatchMaker{ io, 7654 };
+        auto matchMaker = MatchMaker{ io, 7654, lanSubnet, wanAddress };
         io.run( );
     }
     catch ( std::exception & e )
@@ -80,9 +87,10 @@ int main( int argc, const char ** argv )
 }
 
 
-MatchMaker::MatchMaker( cpp::AsyncIO & io, int port )
+MatchMaker::MatchMaker( cpp::AsyncIO & io, int port, std::string subnet, std::string wanAddress )
 {
     m_wanIp = cpp::TcpServer::resolve( cpp::TcpVersion::v4, wanAddress );
+    m_lanSubnet = subnet;
 
     using namespace std::placeholders;
     m_server.open( io, 7654, 
@@ -149,6 +157,8 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
     node.intAddr = parts[2];
     node.p2pAddr = parts[3];
 
+    auto localNetwork = asio::ip::make_network_v4( m_lanSubnet );
+    node.isLocal = ( localNetwork.hosts( ).find( asio::ip::make_address_v4( addr ) ) != localNetwork.hosts( ).end( ) );
 
     m_server.send( addr, "add : ok\n\n" );
 
@@ -158,18 +168,13 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
         if ( otherNode.id == nodeId )
             { continue; }
 
-        bool isServerLan[2] = 
-        {
-            addressIpOf( node.extAddr ) == addressIpOf( node.intAddr ),
-            addressIpOf( otherNode.extAddr ) == addressIpOf( otherNode.intAddr ),
-        };
-        bool isSameLan = ( isServerLan[0] == isServerLan[1] ) || addressIpOf( node.extAddr ) == addressIpOf( otherNode.extAddr );
+        bool isSameLan = ( node.isLocal && otherNode.isLocal ) || addressIpOf( node.extAddr ) == addressIpOf( otherNode.extAddr );
 
-        std::string p2pAddr = ( isServerLan[1] || isSameLan )
+        std::string p2pAddr = ( otherNode.isLocal || isSameLan )
             ? addressIpOf( otherNode.intAddr ) 
             : addressIpOf( otherNode.extAddr );
 
-        if ( isServerLan[1] && !isSameLan )
+        if ( otherNode.isLocal && !isSameLan )
             { p2pAddr = m_wanIp; }
 
         m_server.send( addr, std::format( "connect {} {} {} {} {}\n\n",
@@ -179,11 +184,11 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
             otherNode.extAddr,
             p2pAddr + ":" + addressPortOf( otherNode.p2pAddr ) ) );
 
-        p2pAddr = ( isServerLan[0] || isSameLan )
+        p2pAddr = ( node.isLocal || isSameLan )
             ? addressIpOf( node.intAddr )
             : addressIpOf( node.extAddr );
 
-        if ( isServerLan[0] && !isSameLan )
+        if ( node.isLocal && !isSameLan )
             { p2pAddr = m_wanIp; }
 
         m_server.send( otherNode.extAddr, std::format( "connect {} {} {} {} {}\n\n",
