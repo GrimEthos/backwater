@@ -2,3 +2,4 @@
 proof/udp-p2p/.out
 proof/udp-p2p/.vs
 *.user
+proof/zone-server/.*
