@@ -46,12 +46,10 @@ namespace sector_server
 
         virtual void                        addObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData,
                                                 std::function<void( Result, AddObjectReply )> result ) override;
         virtual void                        updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) override;
         virtual void                        removeObject(
                                                 const ObjectRef & object ) override;
@@ -79,7 +77,6 @@ namespace sector_server
 
     inline void FromZone::addObject(
         const ObjectRef & object,
-        const ZoneRef & zone,
         const ObjectData & objectData,
         std::function<void( Result, AddObjectReply )> result )
     {
@@ -89,7 +86,6 @@ namespace sector_server
 
     inline void FromZone::updateObject(
         const ObjectRef & object,
-        const ZoneRef & zone,
         const ObjectData & objectData )
     {
 

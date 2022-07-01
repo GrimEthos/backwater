@@ -9,6 +9,33 @@
 #include "zone_server.h"
 
 
+
+class Prototype
+{
+public:
+    Prototype( );
+
+private:
+    void doOutput( );
+    void queueOutput( );
+    void doFrame( );
+    void queueFrame( );
+
+private:
+    cpp::AsyncIO io;
+    cpp::AsyncTimer outputTimer;
+    cpp::AsyncTimer frameTimer;
+
+    std::vector<ViewServer> viewServers;
+    std::vector<SectorServer> sectorServers{ 2 };
+    std::vector<ZoneServer> zoneServers{ 2 };
+
+    cpp::Time nextFrame;
+    int frameCount;
+};
+
+
+
 int main(int argc, char** argv)
 {
     cpp::Program program;
@@ -17,19 +44,7 @@ int main(int argc, char** argv)
 
     try
     { 
-        cpp::AsyncIO io;
-
-        SectorServer sectorServer[2];
-        ZoneServer zoneServer[2];
-        ViewServer viewServer;
-
-        sectorServer[0].fromZone.removeObject( ObjectRef{ 32 } );
-
-        io.post([]() { printf("step 1\n"); });
-        io.post([]() { printf("step 2\n"); });
-        io.post([]() { printf("step 3\n"); });
-
-        io.run();
+        Prototype prototype;
 
         return 0;
     }
@@ -38,6 +53,48 @@ int main(int argc, char** argv)
         cpp::Log::error("error: %s\n", e.what());
         return -1;
     }
+}
+
+
+Prototype::Prototype( )
+{
+    queueOutput( );
+    queueFrame( );
+    
+    io.run( );
+}
+
+
+void Prototype::queueOutput( )
+{
+    outputTimer = io.waitFor( std::chrono::seconds{ 1 }, std::bind( &Prototype::doOutput, this ) );
+}
+
+
+void Prototype::doOutput( )
+{
+    queueOutput( );
+
+    cpp::Log::info( "%d frames\n", frameCount );
+    frameCount = 0;
+}
+
+
+void Prototype::queueFrame( )
+{
+    frameTimer = io.waitUntil( nextFrame, std::bind( &Prototype::doFrame, this ) );
+}
+
+
+void Prototype::doFrame( )
+{
+    frameCount++;
+
+    nextFrame += std::chrono::seconds{ 1 };
+    for ( auto & server : zoneServers )
+        { nextFrame = std::min( nextFrame, server.runFrame( )); }
+
+    queueFrame( );
 }
 
 

@@ -124,6 +124,10 @@
             * maybe leave unassigned until it is saved to sector server
                 * naw, need view servers to be able to reference object ids to sector server
             * maybe sector provides reserved object ids to zone-servers
+        5. how to run at dynamic fps for cpu variations
+            * sleep cycles too long: true fps lower than target fps
+            * sleep cycles too short: 
+            * inconsistant frame times
     * Entities: zone-server, zone
         * zone-server can contain multiple zones, handle communication with servers of adjacent zones.
     * Interfaces

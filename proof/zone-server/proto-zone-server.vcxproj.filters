@@ -18,6 +18,9 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sim.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="zone_data.h">
@@ -41,7 +44,13 @@
     <ClInclude Include="view_server_detail.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="zone_server_detail.h">
+    <ClInclude Include="zone_server_interfaces.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="zone_server_data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

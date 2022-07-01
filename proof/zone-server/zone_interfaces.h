@@ -8,16 +8,14 @@
 
 struct IZoneToSectorServer
 {
-    using ptr_t = std::unique_ptr<IZoneToSectorServer>;
+    using ptr_t = std::shared_ptr<IZoneToSectorServer>;
 
     virtual void                            addObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData,
                                                 std::function<void( Result, AddObjectReply )> result ) = 0;
     virtual void                            updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) = 0;
     virtual void                            removeObject(
                                                 const ObjectRef & object ) = 0;
@@ -26,33 +24,33 @@ struct IZoneToSectorServer
 
 struct IZoneToViewServer
 {
-    using ptr_t = std::unique_ptr<IZoneToViewServer>;
+    using ptr_t = std::shared_ptr<IZoneToViewServer>;
 
     virtual void                            updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) = 0;
     virtual void                            removeObject(
+                                                const SectorRef & sector,
                                                 const ObjectRef & object ) = 0;
 };
 
 
 struct IZoneToZoneServer
 {
-    using ptr_t = std::unique_ptr<IZoneToZoneServer>;
+    using ptr_t = std::shared_ptr<IZoneToZoneServer>;
 
     virtual void                            updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) = 0;
     virtual void                            removeObject(
+                                                const SectorRef & sector,
                                                 const ObjectRef & object ) = 0;
 };
 
 
 struct ISectorToZoneServer
 {
-    using ptr_t = std::unique_ptr<ISectorToZoneServer>;
+    using ptr_t = std::shared_ptr<ISectorToZoneServer>;
 
     virtual void                            updateSectorInfo(
                                                 const SectorRef & sector,
@@ -77,16 +75,16 @@ struct ISectorToZoneServer
 
     virtual void                            updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) = 0;
     virtual void                            removeObject(
+                                                const SectorRef & sector,
                                                 const ObjectRef & object ) = 0;
 };
 
 
 struct ISectorToViewServer
 {
-    using ptr_t = std::unique_ptr<ISectorToViewServer>;
+    using ptr_t = std::shared_ptr<ISectorToViewServer>;
 };
 
 

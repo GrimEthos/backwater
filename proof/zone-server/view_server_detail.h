@@ -20,10 +20,10 @@ namespace view_server
         : public ISectorToViewServer
     {
     public:
-        FromSector( Data & data );
+                                            FromSector( Data & data );
 
     private:
-        Data & m_data;
+        Data &                              m_data;
     };
 
 
@@ -33,13 +33,13 @@ namespace view_server
         : public IZoneToViewServer
     {
     public:
-        FromZone( Data & data );
+                                            FromZone( Data & data );
 
         void                                updateObject(
                                                 const ObjectRef & object,
-                                                const ZoneRef & zone,
                                                 const ObjectData & objectData ) override;
         void                                removeObject(
+                                                const SectorRef & sector,
                                                 const ObjectRef & object ) override;
 
     private:
@@ -65,16 +65,14 @@ namespace view_server
 
     inline void FromZone::updateObject(
         const ObjectRef & object,
-        const ZoneRef & zone,
         const ObjectData & objectData )
     {
-
     }
 
 
     inline void FromZone::removeObject(
+        const SectorRef & sector,
         const ObjectRef & object )
     {
-
     }
 }

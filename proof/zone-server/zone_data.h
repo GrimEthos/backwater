@@ -108,6 +108,7 @@ struct ObjectModuleLink
 struct ObjectData
 {
     ObjectBody                              body;
+    ZoneRef                                 location;
     cpp::XY<double>                         pos;
     ObjectOrientation                       orietation;
     ObjectEffect                            effect;
@@ -131,7 +132,7 @@ struct ViewData
 
 struct ZoneData
 {
-    float                                   speed;
+    float                                   speed = 0;
 };
 
 
