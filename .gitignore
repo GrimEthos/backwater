@@ -1,5 +1,3 @@
-﻿proof/udp-p2p/.build
-proof/udp-p2p/.out
-proof/udp-p2p/.vs
-*.user
-proof/zone-server/.*
+﻿**/.vs
+**/.output
+**.vcxproj.user
