@@ -24,8 +24,30 @@ struct Game
 };
 
 
-void main()
+int main()
 {
-	// module
-	//
+	// addModuleType(landing);
+	// addModuleType(airlock);
+	// addModuleType(corridor);
+	// addModuleType(control_room);
+	// addModuleLinkType(door)
+	// addModuleLinkType(autodoor)
+	// addModuleLinkType(airdoor)
+	// addModuleLinkType(airvent)
+	// addContainerType(peep)
+	// addContainerType(module)
+	// 
+	// addModule(0,landing)
+	// addModule(1,landing)
+	// addModule(2,airlock)
+	// addModule(3,airlock)
+	// addModule(4,corridor)
+	// addModule(5,control_room)
+	// addModuleLink(airdoor, 0, 2)
+	// addModuleLink(airdoor, 1, 3)
+	// addModuleLink(airdoor, 2, 4)
+	// addModuleLink(airdoor, 3, 4)
+	// addModuleLink(airdoor, 4, 5)
+
+	return 0;
 } 

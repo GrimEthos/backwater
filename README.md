@@ -178,3 +178,20 @@
         * Hello to View
             1. Send client's udp endpoint to server
             2. Get server's udp endpoint + key
+
+* Data Model
+    * spacial simulation & graph simulation
+        * spacial simulation involves ships & structures in x/y space
+        * graph simulation involves module locations within ships & structures
+    * things in graph simulation
+        * represent classification & variation (classification hierarchy)
+        * knowledge of
+            * things - knowledge of thing types, might not know what something is
+            * modules - knowledge of module graph locations, familiarity of internal structures
+            * spacial objects - knowledge of location & object infomation in spacial sim
+            * tech - knowledge of technologies
+                * technologies are culture specific
+                * tech types 
+            ? how to go from tech -> blueprint -> thing
+                             tech -> blueprint -> building/module
+            ? how do details 

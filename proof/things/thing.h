@@ -1,3 +1,4 @@
+Peep::Id								peep;
 #pragma once
 
 #include <cinttypes>
@@ -7,19 +8,21 @@
 
 //! Things = set of thing types
 //!		e.g. hand_gun, flowers, ring, shield
+//! things[type] { name='' parentType='' name='' flags='' }
 struct Things
 {
 	using TypeId = uint16_t;
 	using Flags = uint64_t;
 	TypeId									type;
-	TypeId									classType;
+	TypeId									parentType;
 	std::string								name;
 	Flags									flags;
 };
 
 
 //! Containers = set of container types
-//!		e.g. chest, backpack, building, closet
+//!		e.g. inventory, crate, barrel, wearable, equipable
+//! containers[type] { name='' flags='' }
 struct Containers
 {
 	using TypeId = uint16_t;
@@ -30,6 +33,7 @@ struct Containers
 };
 
 
+//! modules[type] { name='' flags='' }
 struct Modules
 {
 	using TypeId = uint16_t;
@@ -40,6 +44,7 @@ struct Modules
 };
 
 
+//! module_links[type] { name='' flags='' }
 struct ModuleLinks
 {
 	using TypeId = uint16_t;
@@ -50,6 +55,7 @@ struct ModuleLinks
 };
 
 
+//! thing_flags[name] { mask='' }
 struct ThingFlags
 {
 	std::string								name;
@@ -57,6 +63,7 @@ struct ThingFlags
 };
 
 
+//! container_flags[name] { mask='' }
 struct ContainerFlags
 {
 	std::string								name;
@@ -64,6 +71,7 @@ struct ContainerFlags
 };
 
 
+//! module_flags[name] { mask='' }
 struct ModuleFlags
 {
 	std::string								name;
@@ -71,6 +79,7 @@ struct ModuleFlags
 };
 
 
+//! module_link_flags[name] { mask='' }
 struct ModuleLinkFlags
 {
 	std::string								name;
@@ -79,47 +88,72 @@ struct ModuleLinkFlags
 
 
 //! Container = special thing that contains other containers or things
+//! container[id] { type='' thingType='' parent='' capacity='' }
 struct Container
 {
 	using Id = uint32_t;
 	Id										id;
-	Id										containerId;
-	Things::TypeId							thingType;
 	Containers::TypeId						containerType;
+	Things::TypeId							thingType;
+	Id										parentId; // contained in
 	uint32_t								capacity;
 };
 
 
 //! Thing = anything that goes into a container
+//! thing[containerId][index] { type='' count='' }
 struct Thing
 {
-	Container::Id							containerId;
+	Container::Id							containerId;	// what is it contained in
 	Things::TypeId							thingType;
 	uint32_t								count;
 };
 
 
+//! module[id] { type='' thingType='' containerId='' }
 struct Module
 {
 	using Id = uint32_t;
 	Module::Id								id;
 	Modules::TypeId							type;
-	Container::Id							containerId;
+	Things::TypeId							thingType;
+	Container::Id							containerId;	// contained things
 };
 
 
+//! module_link[id][linkId] { type='' thingType='' }
 struct ModuleLink
 {
 	Module::Id								id;
 	Module::Id								linkId;
 	ModuleLinks::TypeId						type;
+	Things::TypeId							thingType;
 };
 
 
+//! peep[id] { location='' containerId='' }
 struct Peep
 {
 	using Id = uint32_t;
 	Id										id;
 	Module::Id								location;
-	Container::Id							containerId; // inventory
+	Container::Id							containerId;	// inventory
+};
+
+
+//! know_module[peep][thing] { flags='0' }
+struct KnowThings
+{
+	Peep::Id								peep;
+	Things::TypeId							thing;
+	uint64_t								flags;
+};
+
+
+//! know_module[peep][id] { flags='0' }
+struct KnowModule
+{
+	Peep::Id								peep;
+	Module::Id								id;
+	uint64_t								flags;
 };
