@@ -184,7 +184,7 @@
 ## Symbols
 
 A `Symbol` is any named thing that is part of a type hierarchy.  The `Symbol` has flags which indicate how the `Symbol` may be used:
-* can be instantuated as an `Object`
+* can be instantiated as an `Object`
 * can be instantiated as a `Thing`, a `UnqThing`, a `Container`, or a `Blueprint`
 * can be instantiated as a `Module` or `ModuleLink`
 * identifies a `Language`, `Culture`, or `Tech`
@@ -198,7 +198,7 @@ An `Object` is an object in the 2D simulator having a position and velocity.  An
 
 ## Modules
 
-A `Module` is a locatation in the 2D simulator that represents an inhabitable structure that can contain `Peep` and `Thing` lists.  Each `Module` are bound to an `ObjectNode` so it can be related to the 2D simulator.  Two `Module` instances can be linked together by a `ModuleLink` to form a graph.  Each `Module` has a unique `Container` instance that is used to represent its contents.
+A `Module` is a locatation in the 2D simulator that represents an inhabitable structure that can contain `Peep` and `Thing` lists.  Each `Module` is bound to an `ObjectNode` so it can be related to the 2D simulator.  Two `Module` instances can be linked together by a `ModuleLink` to form a graph.  Each `Module` has a unique `Container` instance that is used to represent its contents.
 
 ## Things
 
@@ -207,10 +207,12 @@ A `ThingType` binds a `Symbol` to instantiation attributes of a `Thing`
 * Has `Container` dimensions (x,y,z)
 * Has flags: liquid, gas
 
-A `Blueprint` is a list of `Thing` objects needed to make a `ThingType`
+A `Blueprint` is a list of `BlueprintThing` objects needed to make a `ThingType`
 * Has a `Symbol` indicating language or culture
+* Has a `ThingType` for what it makes
 
-A `Thing` is an object that can be contained by a `Module` or in the inventory of a `Peep`.
+A `BlueprintThing` is an object referenced by a `Blueprint` as a ingrediant.
+* Has a `Blueprint`
 * Has a `ThingType`
 * Has a quantity
 
@@ -221,6 +223,11 @@ A `UnqThing` is a `Thing` that is referenced by a specific ?history? and may hav
 A `Container` is an object which references a list of `Thing`, `UniqThing`, and `Container` objects that are its contents.  A `Container` may have a parent `Container` (what it is contained by).
 * Has a `ThingType`
 
+A `ContainerThing` is an object that can be contained by a `Module` or in the inventory of a `Peep`.
+* Has a `Container`
+* Has a `ThingType`
+* Has a quantity
+
 ## Knowledge
 
 A `Data` object is a list of `Datum` objects and a `Narrative` object.
@@ -229,6 +236,8 @@ A `Data` object is a list of `Datum` objects and a `Narrative` object.
 A `Datum` object indicates a quantity of knowledge about a `Symbol`
 * Has a `Symbol` type
 * Has an indication of ?quality? and ?quantity? of information.
+  * quantity may be a bitfield (how much to know about something)
+  * quality may be number indicating how good the information is-
 
 A `Narrative` is an object with a list of `Narrative` and `NarrativeEvent` objects.
 
@@ -267,42 +276,13 @@ There are several domains of knowledge:
     * `Data` - these represent knowable information about a `Thing`
     * `Blueprints` - these represent a list of physical objects needed to build another object
 
+## Network
+* NetworkAccess - joins `UniqueThing` to `Network`; has encoding, encryption
+* Network - container for KnowThing, KnowModule, KnowObject, NarrativeHistory
+* NetworkData -
 
-- [ ] things: how to store object types, inventories, containers of things
-- [ ] 
-* jdj
-    * spacial simulation & graph simulation
-        * spacial simulation involves ships & structures in x/y space
-        * graph simulation involves module locations within ships & structures
-    * things in graph simulation
-        * represent classification & variation (classification hierarchy)
-        * knowledge of
-            * things - knowledge of thing types, might not know what something is
-            * modules - knowledge of module graph locations, familiarity of internal structures
-            * spacial objects - knowledge of location & object infomation in spacial sim
-            * tech - knowledge of technologies
-                * technologies are culture specific
-                * tech types 
-            ? how to go from tech -> blueprint -> thing
-                             tech -> blueprint -> building/module
-            ? how do details 
-        * thing list
-            * lists of things are needed for multiple reasons: physical containers, blue prints, knowledge
-        * types
-            * Things
-                * ThingClass - classification of a thing; i.e. type hierarchy
-                * Thing - instance & count of common thing; always in a `ThingContainer`
-                * ThingEntity - instance of a thing that is related to a `ThingHistory`; always in a `ThingContainer`
-                * ThingContainer - instance of thing that other `Things`, `ThingEntities`, or `ThingContainers` relate to; maybe in another `ThingContainer`
-                * ThingHistory - joins `ThingEntity` to `NarrativeHistory`
-            * Peeps
-                * PeepHistory - joins `PeepEntity` to `NarrativeHistory`; nature of knowledge (originated, observed, rumored)
-            * Narrative
-                * NarrativeHistory - maybe in another `NarrativeHistory`
-                * NarrativeData - instance of narrative info; has language attr; always in `NarrativeHistory`
-            * Network
-                * NetworkAccess - joins `ThingEntity` to `Network`; has encoding, encryption
-                * Network - container for KnowThing, KnowModule, KnowObject, NarrativeHistory
-                * NetworkData -
-            * 
-            * (knowledge types/flags) - recognition, familiarity (know history of), usage, maintenance (keep running, troubleshoot, repair), creation
+
+Tech Ideas
+* Material Production: plate, sheet, wire, beam, sealant
+* Tool Production: bolts, nuts, rivets, wiring
+* Module Production: ModulePartX, ModulePartY
