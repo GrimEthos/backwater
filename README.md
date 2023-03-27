@@ -286,3 +286,44 @@ Tech Ideas
 * Material Production: plate, sheet, wire, beam, sealant
 * Tool Production: bolts, nuts, rivets, wiring
 * Module Production: ModulePartX, ModulePartY
+
+# Logical Components
+
+* GalaxyServer
+* ContentServer
+    * operation: handle content data queries
+    * storage: user_data[], story_data[], scenario_data[], sector_data[]
+* SectorServer
+    * handle sector data queries
+    * manage zone server sessions
+    * manage view server sessions
+    * storage: object[], module[], peep[]
+* ConsoleServer
+    * manage console & view sessions
+* ViewServer
+    * manage object id translation, coord translation, visibility
+
+# Interactions
+
+* connection (AuthServer, ProxyServer, SessionServer)
+    1. client auth to auth server
+    2. client connect to proxy
+        * auth - using auth id
+        * reauth - using existing session id
+    3. proxy create session mapping
+        * session id returned to client
+* hello (GalaxyServer)
+    1. determine region of user content
+    2. register user content session
+    3. choose console server & register console session
+    4. return content server and console server session to client
+* console-view session
+    1. user selects/creates a `player` in a `scenario` via ConsoleServer
+        * when creating a new player the GalaxyServer will instanciate state with ContentServer & SectorServer
+    2. ConsoleServer reads SectorServers from Story data
+    3. ConsoleServer requests a view-session from each SectorServer
+        * Each view-session identifies a ViewServer
+    4. ConsoleServer requests client info from ViewServer
+        * ViewServer [ip:port], [key]
+
+# Data
