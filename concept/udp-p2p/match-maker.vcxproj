@@ -61,7 +61,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>../../..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../..;..\..\..\cpp\lib\asio-1.28.0\include;</AdditionalIncludeDirectories>
+      <AdditionalBMIDirectories>..\..\..\cpp</AdditionalBMIDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -80,7 +81,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>../../..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../..;..\..\..\cpp\lib\asio-1.28.0\include;</AdditionalIncludeDirectories>
+      <AdditionalBMIDirectories>..\..\..\cpp</AdditionalBMIDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -95,14 +97,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="match_msg.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\async\async.vcxproj">
-      <Project>{77c4601e-ba4e-410c-98cd-fd08701de057}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\cpp\cpp.vcxproj">
-      <Project>{27ac4216-98b1-45bb-b2f2-fdab129254f7}</Project>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

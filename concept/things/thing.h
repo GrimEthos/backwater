@@ -9,7 +9,7 @@ Peep::Id								peep;
 
 struct Vector3
 {
-	float x, y, z;
+	float									x, y, z;
 };
 
 

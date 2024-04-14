@@ -1,10 +1,12 @@
+import cpp.memory;
+import cpp.chrono;
+import cpp.program;
+import cpp.asio.udp;
+import cpp.asio.tcp;
+
 #include <iostream>
 #include <set>
-
-#include <cpp/Program.h>
-#include <cpp/Log.h>
-#include <async/UdpClient.h>
-#include <async/TcpClient.h>
+#include <map>
 
 #include <Windows.h>
 
@@ -73,7 +75,7 @@ class ControlConnection
 {
 public:
     ControlConnection(
-        cpp::AsyncIO & io,
+        cpp::AsyncContext & io,
         std::string addr,
         std::string name,
         std::string p2pAddr,
@@ -88,7 +90,7 @@ private:
 private:
     cpp::TcpClient m_tcp;
     cpp::AsyncTimer m_reconnectTimer;
-    cpp::AsyncIO & m_io;
+    cpp::AsyncContext & m_io;
     std::string m_addr;
     std::string m_name;
     std::string m_p2pAddr;
@@ -101,7 +103,7 @@ private:
 class PeerConnection
 {
 public:
-    PeerConnection( cpp::AsyncIO & io );
+    PeerConnection( cpp::AsyncContext & io );
 
     std::string getBindAddress( ) const;
 
@@ -120,7 +122,7 @@ private:
     void checkPeerStatus( PeerInfo & info );
 
 private:
-    cpp::AsyncIO & m_io;
+    cpp::AsyncContext & m_io;
     cpp::UdpClient m_udp;
     std::map<int, PeerDesc> m_peers;
     std::map<int, PeerInfo> m_peerInfo;
@@ -146,7 +148,7 @@ int main( int argc, const char ** argv )
         std::string name = ( argc >= 2 ) ? argv[1] : computerName;
         std::string addr = ( argc >= 3 ) ? argv[2] : "home.grimethos.com:7654";
 
-        cpp::AsyncIO io;
+        cpp::AsyncContext io;
 
         auto peerConnection = PeerConnection{ io };
         auto p2pAddr = peerConnection.getBindAddress( );
@@ -175,7 +177,7 @@ int main( int argc, const char ** argv )
 
 
 ControlConnection::ControlConnection(
-    cpp::AsyncIO & io,
+    cpp::AsyncContext & io,
     std::string addr,
     std::string name,
     std::string p2pAddr,

@@ -4,8 +4,6 @@
 
 ### Overview
 
-
-
 ## Game Data
 
 ### Data Entities

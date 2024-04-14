@@ -87,6 +87,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="auth.ixx" />
     <ClCompile Include="proxy.ixx" />
+    <ClCompile Include="view-proto.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\cpp\cpp.vcxproj">
