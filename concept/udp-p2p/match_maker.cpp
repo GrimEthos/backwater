@@ -3,13 +3,15 @@ import cpp.chrono;
 import cpp.program;
 import cpp.asio.udp;
 import cpp.asio.tcp;
+import cpp.asio.ip;
 
 #include <string>
 #include <map>
 #include <functional>
 #include <memory>
 #include <ios>
-#include <cpp/lib/asio.h>
+#include <format>
+#include <algorithm>
 
 
 struct Node
@@ -60,6 +62,7 @@ private:
     int m_nextId = 1;
     std::map<int, Node> m_nodes;
     std::map<std::string, int> m_addrNodes;
+    cpp::Inet4::LocalNetwork::Array m_networks;
 };
 
 
@@ -77,7 +80,7 @@ int main( int argc, const char ** argv )
         const char * lanSubnet = "192.168.0.0/16";
 
         cpp::AsyncContext io;
-        auto matchMaker = MatchMaker{ io, 7654, lanSubnet, wanAddress };
+        auto matchMaker = MatchMaker{ io, 54321, lanSubnet, wanAddress };
         io.run( );
     }
     catch ( std::exception & e )
@@ -94,8 +97,10 @@ MatchMaker::MatchMaker( cpp::AsyncContext & io, int port, std::string subnet, st
     m_wanIp = cpp::TcpServer::resolve( cpp::TcpVersion::v4, wanAddress );
     m_lanSubnet = subnet;
 
+    m_networks = cpp::Inet4::localNetworks( );
+
     using namespace std::placeholders;
-    m_server.open( io, 7654, 
+    m_server.open( io, 54321, 
         std::bind( &MatchMaker::onConnect, this, _1, _2 ),
         std::bind( &MatchMaker::onRecv, this, _1, _2 ),
         std::bind( &MatchMaker::onDisconnect, this, _1, _2 ), 
@@ -158,9 +163,14 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
     node.extAddr = addr;
     node.intAddr = parts[2];
     node.p2pAddr = parts[3];
+    node.isLocal = false;
 
-    auto localNetwork = asio::ip::make_network_v4( m_lanSubnet );
-    node.isLocal = ( localNetwork.hosts( ).find( asio::ip::make_address_v4( addr ) ) != localNetwork.hosts( ).end( ) );
+    auto host = cpp::Inet4::toAddress( addr );
+    for ( auto & network : m_networks ) 
+    {
+        if ( host.is_subnet_of( network.network ) ) 
+            { node.isLocal = true; break; }
+    }
 
     m_server.send( addr, "add : ok\n\n" );
 
@@ -201,7 +211,7 @@ void MatchMaker::add( const std::string & addr, cpp::Memory msg )
             p2pAddr + ":" + addressPortOf( node.p2pAddr ) ) );
     }
 
-    cpp::Log::info( std::format( "add node: {} {} {} {} {}\n",
+    cpp::Log::info( std::format( "add node: id='{}' name='{}' ext='{}' int='{}' p2p='{}'\n",
         node.id,
         node.name,
         node.extAddr,
@@ -223,7 +233,7 @@ void MatchMaker::remove( const std::string & addr )
     }
 
     auto & node = m_nodes[nodeId];
-    cpp::Log::info( std::format( "remove node: {} {} {} {} {}\n",
+    cpp::Log::info( std::format( "remove node: id='{}' name='{}' ext='{}' int='{}' p2p='{}'\n",
         node.id,
         node.name,
         node.extAddr,

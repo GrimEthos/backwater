@@ -7,6 +7,8 @@ import cpp.asio.tcp;
 #include <iostream>
 #include <set>
 #include <map>
+#include <functional>
+#include <chrono>
 
 #include <Windows.h>
 
@@ -146,7 +148,7 @@ int main( int argc, const char ** argv )
         GetComputerNameExA( ComputerNameNetBIOS, computerName, &len );
 
         std::string name = ( argc >= 2 ) ? argv[1] : computerName;
-        std::string addr = ( argc >= 3 ) ? argv[2] : "home.grimethos.com:7654";
+        std::string addr = ( argc >= 3 ) ? argv[2] : "home.grimethos.com:54321";
 
         cpp::AsyncContext io;
 
@@ -263,7 +265,7 @@ void ControlConnection::onRecv( std::string & recvBuffer )
 }
 
 
-PeerConnection::PeerConnection( cpp::AsyncIO & io )
+PeerConnection::PeerConnection( cpp::AsyncContext & io )
     : m_io(io )
 {
     using namespace std::placeholders;
@@ -350,7 +352,7 @@ void PeerConnection::updatePeerStatus( PeerInfo & info, uint32_t msgIndex )
     }
     else
     {
-        for ( int i = info.currentIndex; i < msgIndex; i++ )
+        for ( uint32_t i = info.currentIndex; i < msgIndex; i++ )
             { info.currentFrame.insert( i ); }
         info.currentIndex = msgIndex + 1;
     }
@@ -388,7 +390,7 @@ void PeerConnection::onRecv( cpp::Memory from, cpp::Memory data )
     {
         auto & info = m_peerInfo[peerDesc->id];
 
-        uint32_t * msgData = (uint32_t *)data.begin( );
+        uint32_t * msgData = (uint32_t *)data.data();
 
         uint32_t msgIndex = msgData[0];
         updatePeerStatus( info, msgIndex );
