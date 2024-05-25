@@ -42,10 +42,12 @@ export namespace grim
 
         private:
             struct MyA : A { void foo( ) override; };
+            struct MyB : B { void foo( ) override; };
+            struct MyC : C { void foo( ) override; };
         private:
             MyA a_;
-            B b_;
-            C c_;
+            MyB b_;
+            MyC c_;
         };
 
         struct IProxy

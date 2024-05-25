@@ -7,6 +7,47 @@ export module grim.auth;
 
 import cpp.memory;
 
+/*
+    std::filesystem::path DefaultGrimAuthPath = "./.grimauth";
+
+    bool isInteractive;
+    uint64_t authToken;
+
+    // blocking & interactive
+    isInteractive = true;
+    authToken = grim::auth::login(
+        "monkeysmarts@gmail.com",
+        "backwater.grimethos.com",
+        DefaultGrimAuthPath,
+        isInteractive );
+
+    // non-blocking & interactive
+    isInteractive = true;
+    grim::auth::login(
+        io,
+        "monkeysmarts@gmail.com",
+        "backwater.grimethos.com",
+        DefaultGrimAuthPath,
+        isInteractive,
+        []( grim::auth::Result result, uint64_t token, std::string_view authUrl )
+        {
+            authToken = token;
+        } );
+
+    // non-blocking & passive
+    isInteractive = false;
+    authToken = grim::auth::login(
+        io,
+        "monkeysmarts@gmail.com",
+        "backwater.grimethos.com",
+        DefaultGrimAuthPath,
+        false,
+        []( grim::auth::Result result, uint64_t token, std::string_view authUrl )
+        {
+            authToken = token;
+        } );
+*/
+
 export namespace grim
 {
     namespace auth

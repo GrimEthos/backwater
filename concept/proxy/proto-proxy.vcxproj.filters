@@ -21,5 +21,8 @@
     <ClCompile Include="proxy.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="session_server.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
