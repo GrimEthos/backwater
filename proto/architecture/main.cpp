@@ -3,8 +3,8 @@
 
 import cpp.program;
 import cpp.asio;
-import grim.auth;
-import grim.net;
+import grim.proto.auth;
+import grim.proto.net;
 
 int main(int argc, char ** argv)
 {

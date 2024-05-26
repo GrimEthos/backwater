@@ -94,7 +94,7 @@
     <ClCompile Include="auth.ixx" />
     <ClCompile Include="net.ixx" />
     <ClCompile Include="proxy.ixx" />
-    <ClCompile Include="view-proto.ixx" />
+    <ClCompile Include="game_view.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\cpp\cpp.vcxproj">

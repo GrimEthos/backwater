@@ -1,5 +1,8 @@
 # backwater
 
+* [code](/etc/code.md)
+* [services](/etc/services.md)
+
 ## Game Play
 
 ### Overview

@@ -4,11 +4,11 @@ module;
 #include <functional>
 #include <system_error>
 
-export module grim.net;
+export module grim.proto.net;
 import cpp.asio.tcp;
 import cpp.memory;
 import cpp.chrono;
-import grim.auth;
+import grim.proto.auth;
 
 //! Types of network entities:
 //! (1) session server
@@ -278,7 +278,7 @@ namespace grim::net
     void Client::doAuth( )
     {
         onAuthingHandler( this->addr, this->access );
-        uint64_t authToken = grim::auth::login( this->email, "grimethos.com" );
+        //uint64_t authToken = grim::auth::login( this->email, "grimethos.com" );
 
     }
 

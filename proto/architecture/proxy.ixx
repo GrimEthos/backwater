@@ -3,7 +3,7 @@ module;
 #include <string>
 #include <vector>
 #include <functional>
-export module grim.proxy;
+export module grim.proto.proxy;
 
 import cpp.memory;
 

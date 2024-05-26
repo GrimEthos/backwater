@@ -24,7 +24,7 @@
     <ClCompile Include="proxy.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="view-proto.ixx">
+    <ClCompile Include="game_view.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="net.ixx">

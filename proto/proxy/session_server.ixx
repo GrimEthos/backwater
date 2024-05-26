@@ -7,12 +7,12 @@ module;
 #include <functional>
 #include <system_error>
 
-export module grim.proxy.session;
+export module grim.proto.session_server;
 import cpp.random;
 import cpp.bit;
 import cpp.asio.ip;
 import cpp.asio.tcp;
-import grim.net;
+import grim.proto.net;
 
 export namespace grim
 {

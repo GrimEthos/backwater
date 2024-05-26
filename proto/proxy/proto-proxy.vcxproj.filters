@@ -24,5 +24,8 @@
     <ClCompile Include="session_server.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="auth_client.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
