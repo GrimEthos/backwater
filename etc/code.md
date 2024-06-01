@@ -1,15 +1,14 @@
 # code
 
-## namespace
-* grimnet
-* grimauth
-* grim::game
-	* galaxy
-	* content
-	* sector
-	* zone
-	* view
-	* console
+## goals
+* arch - attempt to describe architecture using code
+* lib - encapsulate arch, client, and server code as static libraries
+* test - all lib code is testable using a single process, including integration testing
+
+## namespaces
+* grim::net - client, proxy_server, session_serer
+* grim::auth - client, server, emailer
+* grim::game - client, servers
 
 ## components
 
