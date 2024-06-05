@@ -66,6 +66,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>../../../cpp/lib/openssl/lib/</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -87,18 +88,26 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>../../../cpp/lib/openssl/lib/</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="auth.ixx" />
-    <ClCompile Include="net.ixx" />
     <ClCompile Include="proxy.ixx" />
     <ClCompile Include="game_view.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\cpp\cpp.vcxproj">
       <Project>{27ac4216-98b1-45bb-b2f2-fdab129254f7}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\grimauth\grimauth.vcxproj">
+      <Project>{034c56fa-50bf-4031-9a05-ac809e4c760c}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\grimnet\grimnet.vcxproj">
+      <Project>{8ac9fc3b-6131-4fde-9a1b-4b692f39c267}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\lib\arch\arch.vcxproj">
+      <Project>{822099d0-9c75-4cd1-a6d7-399239338db0}</Project>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

@@ -12,7 +12,7 @@ import cpp.random;
 import cpp.bit;
 import cpp.asio.ip;
 import cpp.asio.tcp;
-import grim.proto.net;
+import grim.net;
 
 export namespace grim
 {

@@ -15,18 +15,17 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="net.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="proxy.ixx">
+    <ClCompile Include="net_client.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="game_view.ixx">
+    <ClCompile Include="net_proxy_server.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include=".editorconfig" />
-    <None Include="readme.md" />
+    <ClCompile Include="net_session_server.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

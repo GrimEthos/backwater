@@ -15,18 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="auth.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="proxy.ixx">
+    <ClCompile Include="auth_client.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="game_view.ixx">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include=".editorconfig" />
-    <None Include="readme.md" />
   </ItemGroup>
 </Project>

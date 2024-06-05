@@ -19,20 +19,27 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="arch.ixx" />
-    <ClCompile Include="auth.ixx" />
     <ClCompile Include="net.ixx" />
+    <ClCompile Include="net_client.ixx" />
+    <ClCompile Include="net_proxy_server.ixx" />
+    <ClCompile Include="net_session_server.ixx" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\external\cpp\cpp.vcxproj">
+    <ProjectReference Include="..\external\cpp\cpp.vcxproj">
       <Project>{27ac4216-98b1-45bb-b2f2-fdab129254f7}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\grimauth\grimauth.vcxproj">
+      <Project>{034c56fa-50bf-4031-9a05-ac809e4c760c}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\lib\arch\arch.vcxproj">
+      <Project>{822099d0-9c75-4cd1-a6d7-399239338db0}</Project>
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{822099d0-9c75-4cd1-a6d7-399239338db0}</ProjectGuid>
-    <RootNamespace>arch</RootNamespace>
+    <ProjectGuid>{8ac9fc3b-6131-4fde-9a1b-4b692f39c267}</ProjectGuid>
+    <RootNamespace>grimnet</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -147,7 +154,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>

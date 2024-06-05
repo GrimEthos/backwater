@@ -15,7 +15,7 @@ import cpp.random;
 import cpp.file;
 import cpp.windows;
 import cpp.bit.file;
-import grim.proto.auth;
+import grim.arch.auth;
 
 export namespace grim::auth
 {
@@ -50,7 +50,7 @@ namespace grim::auth
         if ( !passKey )
         {
             std::string newPassKey =
-                cpp::Encoder::intToHex( rng.rand( ) ) +
+                cpp::Encoder::intToHex( rng.rand( ), 0, true, false ) +
                 cpp::Encoder::intToHex( rng.rand( ) ) +
                 cpp::Encoder::intToHex( rng.rand( ) ) +
                 cpp::Encoder::intToHex( rng.rand( ) );

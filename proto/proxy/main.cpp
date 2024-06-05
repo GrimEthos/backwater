@@ -5,6 +5,7 @@ import cpp.program;
 import cpp.windows;
 import cpp.asio;
 import proxy;
+import grim.net;
 import grim.proto.auth_client;
 import grim.proto.session_server;
 
@@ -56,16 +57,19 @@ int main( int argc, const char ** argv )
         // connecting... done.
         // authenticating.... done.
         // ready
-        client.onConnecting( []( std::string_view address ) { cpp::Log( "connecting... " ); } );
-        client.onConnect( []( std::string_view address, std::error_code ec, std::string_view reason ) { } );
-        client.onAuthing( []( std::string_view email, std::string_view access ) { cpp::Log( "authing... " ); } );
-        client.onAuth( []( bool isSuccess, std::string_view failReason ) { } );
-        client.onReady( []( uint64_t sessionId )
+        client.onConnecting( []( grim::net::StrArg address ) { cpp::Log::info( "connecting... " ); } );
+        client.onConnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) { cpp::Log::info( "connect - {}", reason ); } );
+        client.onAuthing( []( grim::net::StrArg addr, grim::net::StrArg access ) { cpp::Log::info( "authing... " ); } );
+        client.onAuth( []( grim::net::StrArg email, uint64_t sessionId, grim::net::Result result, std::string reason ) { cpp::Log::info( "auth. " ); } );
+        client.onReady( []( grim::net::StrArg addr, grim::net::Result result, std::string reason )
             {
-                    sampleAPI.hello( []( ) { } );
+                cpp::Log::info( "ready. " );
+                //sampleAPI.hello( []( ) { } );
             } );
-        client.open( io, address, "monkeysmarts@gmail.com", "[user access]" );
+        client.onDisconnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) { cpp::Log::info( "disconnect - {}", reason ); } );
+        client.open( io, "localhost:65432", "monkeysmarts@gmail.com", "[user access]" );
 
+        /*
         std::error_code err;
         std::string reason;
         std::chrono::seconds timeout{ 5 };
@@ -96,7 +100,13 @@ int main( int argc, const char ** argv )
         share.updateFriend( "monkeysmarts@gmail.com" );
         share.peek( "monkeysmarts@gmail.com" );
         share.addFollow( "monkeysmarts@gmail.com", "wall" );
-
+        */
+        cpp::windows::Kernel32::setConsoleCtrlHandler( [&]( DWORD dwCtrlType )
+            {
+                io.post( [&]( ) { client.close( ); } );
+                return true;
+            } );
+        io.run( );
 
         client.close( );
     }
