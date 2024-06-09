@@ -9,8 +9,6 @@ import grim.net;
 import grim.proto.auth_client;
 import grim.proto.session_server;
 
-using namespace grim;
-
 int main( int argc, const char ** argv )
 {
     cpp::Program program;
@@ -69,15 +67,14 @@ int main( int argc, const char ** argv )
         client.onDisconnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) { cpp::Log::info( "disconnect - {}", reason ); } );
         client.open( io, "localhost:65432", "monkeysmarts@gmail.com", "[user access]" );
 
-        /*
-        std::error_code err;
+        grim::net::Result result;
         std::string reason;
-        std::chrono::seconds timeout{ 5 };
 
         std::string address;
-        if ( !client.connect( timeout, &address, &err, &reason ) )
-        { }
+        if ( !client.connect( 5, &address, &result, &reason ) )
+            { client.close( ); }
 
+        /*
         std::string email;
         uint64_t sessionId;
         if ( !client.auth( timeout, &email, &sessionId, &err, &reason ) )

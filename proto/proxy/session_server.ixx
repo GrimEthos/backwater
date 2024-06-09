@@ -217,7 +217,7 @@ namespace grim
         std::string dhpPem = "";
 
         detail->tcp.open(
-            io.get( ),
+            *io,
             detail->port,
             std::bind( &SessionServer::onConnect, this, _1, _2 ),
             std::bind( &SessionServer::onReceive, this, _1, _2 ),

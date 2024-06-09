@@ -8,6 +8,7 @@ export module grim.net.client;
 
 import grim.arch.net;
 import cpp.asio.tcp;
+import cpp.thread;
 
 export namespace grim::net
 {
@@ -31,24 +32,26 @@ export namespace grim::net
         void                                connect(
                                                 int timeoutSeconds,
                                                 ConnectFn ) override;
-        Result                              connect(
+        bool                                connect(
                                                 int timeoutSeconds,
-                                                StrOut address ) override;
+                                                StrOut address,
+                                                Result * result, StrOut reason ) override;
 
         void                                auth(
                                                 int timeoutSeconds,
                                                 AuthFn ) override;
-        Result                              auth(
+        bool                                auth(
                                                 int timeoutSeconds,
                                                 StrOut email,
-                                                uint64_t * sessionId ) override;
+                                                uint64_t * sessionId,
+                                                Result * result, StrOut reason ) override;
 
         void                                ready(
                                                 int timeoutSeconds,
                                                 ReadyFn ) override;
-        Result                              ready(
+        bool                                ready(
                                                 int timeoutSeconds,
-                                                Result result ) override;
+                                                Result * result, StrOut reason ) override;
 
         void                                send(                               // request
                                                 uint64_t toSessionId,
@@ -70,6 +73,10 @@ export namespace grim::net
     private:
         void                                doConnect( );
         void                                doAuth( );
+
+        void                                onConnect( StrArg addr, Result result, std::string reason );
+        void                                onAuth( StrArg email, uint64_t sessionId, Result result, std::string reason );
+        void                                onReady( StrArg addr, Result result, std::string reason );
     private:
         cpp::AsyncContext                   io;
         std::vector<std::string>            addrs;
@@ -84,6 +91,14 @@ export namespace grim::net
         AuthFn                              onAuthHandler;
         ReadyFn                             onReadyHandler;
         DisconnectFn                        onDisconnectHandler;
+
+        ConnectFn                           connectHandler;
+        AuthFn                              authHandler;
+        ReadyFn                             readyHandler;
+
+        uint64_t                            isConnected : 1;
+        uint64_t                            isAuthed : 1;
+        uint64_t                            isReady : 1;
 
         std::string                         addr;
         uint64_t                            sessionId;
@@ -124,11 +139,10 @@ namespace grim::net
 
         if ( onConnectingHandler ) 
             { onConnectingHandler( this->addr ); }
-        tcp.connect( io, addr,
+        tcp.connect( *io, addr,
             [this]( std::error_code connectResult )
             {
-                if ( onConnectHandler )
-                    { onConnectHandler( this->addr, toResult( connectResult ), connectResult.message( ) ); }
+                onConnect( addr, toResult( connectResult ), connectResult.message( ) );
                 if ( connectResult )
                     { doConnect( ); }
                 else
@@ -150,6 +164,30 @@ namespace grim::net
         if ( onAuthingHandler )
             { onAuthingHandler( this->addr, this->access ); }
         //uint64_t authToken = grim::auth::login( this->email, "grimethos.com" );
+    }
+
+    void Client::onConnect( StrArg address, Result result, std::string reason )
+    {
+        if ( onConnectHandler )
+            { onConnectHandler( address, result, reason ); }
+        if ( connectHandler )
+            { connectHandler( address, result, reason ); }
+    }
+
+    void Client::onAuth( StrArg email, uint64_t sessionId, Result result, std::string reason )
+    {
+        if ( onAuthHandler )
+            { onAuthHandler( email, sessionId, result, reason ); }
+        if ( authHandler )
+            { authHandler( email, sessionId, result, reason ); }
+    }
+
+    void Client::onReady( StrArg addr, Result result, std::string reason )
+    {
+        if ( onReadyHandler )
+            { onReadyHandler( addr, result, reason ); }
+        if ( readyHandler )
+            { readyHandler( addr, result, reason ); }
     }
 
     void Client::close( )
@@ -189,14 +227,54 @@ namespace grim::net
 
     void Client::connect(
         int timeoutSeconds,
-        ConnectFn )
+        ConnectFn fn )
     {
+        if ( connectHandler )
+            { io.post( [=, this]( ) { fn( addr, ResultCode::Retry, "Retry" ); } ); return; }
+        if ( addr.empty() )
+            { io.post( [=, this]( ) { fn( addr, ResultCode::NoConnection, "No connection" ); } ); return; }
+        if ( isConnected )
+            { io.post( [=, this]( ) { fn( addr, ResultCode::Ok, "Ok" ); } ); return; }
+
+        cpp::AsyncTimer timeout = io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [=,this]( )
+            {
+                connectHandler = nullptr;
+                fn( addr, ResultCode::Timeout, "Timeout" );
+            } );
+        connectHandler = [=,this]( StrArg address, Result result, std::string reason )
+            { 
+                if ( result == ResultCode::Ok )
+                {
+                    cpp::AsyncTimer{ timeout }.cancel( );
+                    connectHandler = nullptr;
+                    fn( address, result, reason );
+                }
+                if ( addr.empty( ) )
+                {
+                    cpp::AsyncTimer{ timeout }.cancel( );
+                    connectHandler = nullptr;
+                    fn( addr, ResultCode::NoConnection, "No connection" );
+                }
+            };
     }
-    Result Client::connect(
+
+    bool Client::connect(
         int timeoutSeconds,
-        StrOut address )
+        StrOut address,
+        Result * result, StrOut reason )
     {
-        return ResultCode::Timeout;
+        bool isDone = false;
+        Result outResult = ResultCode::Timeout;
+        connect( timeoutSeconds, [&]( StrArg inAddr, Result inResult, std::string inReason )
+            {
+                if ( address ) { *address = inAddr; }
+                if ( result ) { *result = inResult; }
+                if ( reason ) { *reason = inReason; }
+                outResult = inResult;
+                isDone = true;
+            } );
+        while ( !isDone ) { io.runOne( ); }
+        return outResult == ResultCode::Ok;
     }
 
     void Client::auth(
@@ -205,12 +283,14 @@ namespace grim::net
     {
     }
 
-    Result Client::auth(
+    bool Client::auth(
         int timeoutSeconds,
         StrOut email,
-        uint64_t * sessionId )
+        uint64_t * sessionId,
+        Result * result, StrOut reason )
     {
-        return ResultCode::Timeout;
+        Result outResult = ResultCode::Timeout;
+        return outResult == ResultCode::Ok;
     }
 
     void Client::ready(
@@ -219,11 +299,12 @@ namespace grim::net
     {
     }
 
-    Result Client::ready(
+    bool Client::ready(
         int timeoutSeconds,
-        Result result )
+        Result * result, StrOut reason )
     {
-        return ResultCode::Timeout;
+        Result outResult = ResultCode::Timeout;
+        return outResult == ResultCode::Ok;
     }
 
     void Client::send(

@@ -82,24 +82,26 @@ export namespace grim::net
         virtual void                        connect(
                                                 int timeoutSeconds,
                                                 ConnectFn ) = 0;
-        virtual Result                      connect(
+        virtual bool                        connect(
                                                 int timeoutSeconds,
-                                                StrOut address ) = 0;
+                                                StrOut address,
+                                                Result * result, StrOut reason ) = 0;
 
         virtual void                        auth(
                                                 int timeoutSeconds,
                                                 AuthFn ) = 0;
-        virtual Result                      auth(
+        virtual bool                        auth(
                                                 int timeoutSeconds,
                                                 StrOut email,
-                                                uint64_t * sessionId ) = 0;
+                                                uint64_t * sessionId,
+                                                Result * result, StrOut reason ) = 0;
 
         virtual void                        ready(
                                                 int timeoutSeconds,
                                                 ReadyFn ) = 0;
-        virtual Result                      ready(
+        virtual bool                        ready(
                                                 int timeoutSeconds,
-                                                Result result ) = 0;
+                                                Result * result, StrOut reason ) = 0;
 
         virtual void                        send(
                                                 uint64_t toSessionId,

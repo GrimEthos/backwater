@@ -1,5 +1,7 @@
 module;
 
+#include <exception>
+
 export module grim.auth.client;
 
 import cpp.asio;
@@ -9,13 +11,16 @@ import grim.arch.auth;
 
 export namespace grim::auth
 {
+    constexpr const char * DefaultUrl = "https://auth.grimethos.com";
+    constexpr const char * DefaultFolder = "GrimEthos";
+
     class Client : public IClient
     {
     public:
                                                 Client( );
 
         void                                    setAsyncContext( cpp::AsyncContext io );
-        void                                    setAuthDataDir( cpp::FilePath & authDataDir );
+        void                                    setAuthDataDir( cpp::FilePath authDataDir );
 
         Result                                  login(
                                                     UserEmail email,
@@ -52,7 +57,9 @@ namespace grim::auth
 {
     const cpp::FilePath & Client::DefaultAuthDataDir( )
     {
-        static cpp::FilePath defaultAuthDataDir = cpp::windows::Shell::getPath( cpp::windows::Shell::UserAppData ) / "GrimEthos";
+        static cpp::FilePath defaultAuthDataDir = 
+            cpp::windows::Shell::getPath( cpp::windows::Shell::UserAppData ) / DefaultFolder;
+        return defaultAuthDataDir;
     }
 
     Client::Client( )
@@ -65,9 +72,9 @@ namespace grim::auth
         m_io = std::move( io );
     }
 
-    void Client::setAuthDataDir( cpp::FilePath & authDataDir )
+    void Client::setAuthDataDir( cpp::FilePath authDataDir )
     {
-        m_authDataDir = authDataDir;
+        m_authDataDir = std::move( authDataDir );
     }
 
     Result Client::login(
@@ -77,7 +84,8 @@ namespace grim::auth
         int timeoutSeconds,
         AuthToken * authToken )
     {
-
+        if ( !m_io.get( ) ) { throw std::exception{ "" }; }
+        return (int)ResultCode::Ok;
     }
 
     void Client::login(
