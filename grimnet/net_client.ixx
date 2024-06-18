@@ -3,6 +3,7 @@ module;
 #include <system_error>
 #include <string>
 #include <vector>
+#include <chrono>
 
 export module grim.net.client;
 
@@ -134,6 +135,7 @@ namespace grim::net
 
     void Client::doConnect( )
     {
+        if ( !addrs.size( ) ) { return; }
         int index = (int)( ( cpp::Time::now( ).sinceEpoch( ).millis( ) / 10 ) % addrs.size( ) );
         this->addr = addrs[index];
 
@@ -192,6 +194,7 @@ namespace grim::net
 
     void Client::close( )
     {
+        addrs.clear( );
         tcp.disconnect( );
     }
 

@@ -122,13 +122,72 @@ export namespace grim::net
                                                 cpp::Memory data ) = 0;
     };
 
-    struct IProxyAPI
+    struct IProxyServer
     {
-        using                               AuthCallback = std::function<void( uint16_t result, uint64_t sessionId )>;
-        virtual void                        auth(
-                                                uint64_t authToken,
-                                                cpp::Memory access,
-                                                AuthCallback authCallback ) = 0;
+        virtual void                        open(
+                                                cpp::AsyncContext & io,
+                                                StrArg listenAddress,
+                                                StrArg sessionAddress,
+                                                StrArg email,
+                                                uint8_t nodeId ) = 0;
+        virtual void                        close( ) = 0;
+
+        virtual void                        onConnect( ConnectFn ) = 0;
+        virtual void                        onDisconnect( ConnectFn ) = 0;
+    };
+
+    struct ISessionServer
+    {
+        virtual void                        open(
+                                                cpp::AsyncContext & io,
+                                                StrArg listenAddress,
+                                                StrArg email,
+                                                uint8_t nodeId ) = 0;
+        virtual void                        close( ) = 0;
+
+        virtual void                        onAuthing( AuthingFn ) = 0;
+        virtual void                        onAuth( AuthFn ) = 0;
+        virtual void                        onReady( ReadyFn ) = 0;
+
+        virtual void                        onConnect( ConnectFn ) = 0;
+        virtual void                        onDisconnect( ConnectFn ) = 0;
+
+        virtual void                        onHello( StrArg ip, uint64_t authToken, int nodeId ) = 0;
+        virtual void                        onRello( StrArg ip, uint64_t sessionId, int nodeId ) = 0;
+
+        // proxy client requests
+        virtual void                        onAuth( StrArg ip, StrArg extIp, uint64_t authToken ) = 0;
+        virtual void                        onReauth( StrArg ip, StrArg extIp, uint64_t sessionId ) = 0;
+        virtual void                        onAuthServer( StrArg ip, uint64_t sessionId, StrArg svcName, int nodeId ) = 0;
+
+        // proxy requests
+        virtual void                        onLookupSession( StrArg ip, uint64_t sessionId ) = 0;
+        virtual void                        onLookupServer( StrArg ip, StrArg svcName, int nodeId ) = 0;
+
+        struct ClientApi
+        {
+            using                           onHello = std::function<void(
+                                                uint64_t sessionId,
+                                                net::Result result )>;
+            virtual void                    hello( 
+                                                uint64_t authToken, 
+                                                uint8_t nodeId ) = 0;
+
+            using                           onLookupSession = std::function<void(
+                                                uint64_t sessionId,
+                                                net::Result result )>;
+            virtual void                    lookupSession( 
+                                                uint64_t sessionId, 
+                                                onLookupSession ) = 0;
+
+            using                           onLookupServerNode = std::function<void(
+                                                uint64_t sessionId,
+                                                net::Result result )>;
+            virtual void                    lookupServerNode( 
+                                                std::string svcName, 
+                                                int nodeId, 
+                                                onLookupServerNode ) = 0;
+        };
     };
 }
 
