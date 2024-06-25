@@ -143,23 +143,23 @@ export namespace grim
         using                               SessionUdpMap = std::map<uint64_t, SessionUdpInfo>;
     private:
 
-        ResultCode                              verifyConnection(
+        ResultCode                          verifyConnection(
                                                 const std::string & clientAddr,
                                                 uint64_t * sessionId );
-        ResultCode                              verifyServer(
+        ResultCode                          verifyServer(
                                                 uint64_t sessionId,
                                                 std::string_view * service,
                                                 int * nodeId );
-        ResultCode                              verifySession(
+        ResultCode                          verifySession(
                                                 uint64_t sessionId,
                                                 std::string_view * extAddr,
                                                 std::string_view * email,
                                                 uint64_t * userId,
                                                 uint64_t * proxySessionId );
-        ResultCode                              verifyServerNetwork(
+        ResultCode                          verifyServerNetwork(
                                                 std::string serviceName,
                                                 std::string addr );
-        ResultCode                              grimauth(
+        ResultCode                          grimauth(
                                                 const std::string & extAddr,
                                                 uint64_t authToken,
                                                 const std::string & svc,
