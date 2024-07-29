@@ -90,7 +90,6 @@
     <ClCompile Include="auth_client.ixx" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="proxy_server.ixx" />
-    <ClCompile Include="session_server.ixx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\external\cpp\cpp.vcxproj">

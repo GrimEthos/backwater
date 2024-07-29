@@ -6,8 +6,6 @@ import cpp.windows;
 import cpp.asio;
 import proxy;
 import grim.net;
-import grim.proto.auth_client;
-import grim.proto.session_server;
 
 int main( int argc, const char ** argv )
 {
@@ -15,13 +13,26 @@ int main( int argc, const char ** argv )
     cpp::Log::addConsoleHandler( );
     cpp::Log::addDebuggerHandler( );
 
-    try {
+    try 
+    {
         cpp::AsyncContext io;
 
-        grim::test::testSessionServerData( );
+        grim::net::test::testSessionServerData( );
+
+        grim::net::SessionServer sessionServer;
+        sessionServer.open( io, "127.0.0.1:65432", "[::1]:65432", "monkeysmarts@gmail.com" );
+
+        grim::net::Result result;
+        std::string email;
+        uint64_t sessionId = 0;
+        if ( !sessionServer.auth( 5, &email, &sessionId, &result ) )
+            { return 1; }
+
+        if (!sessionServer.ready( 5, &result ))
+            { return 1; }
+
 
         /*
-        SessionServer sessionServer;
         ProxyServer proxyServer[] =
         {
             { "port='3133' sessionServer='localhost:3132'" },
@@ -32,7 +43,6 @@ int main( int argc, const char ** argv )
         SampleClient client =
             { "proxyServer='localhost:3133,localhost:3134'" };
 
-        sessionServer.open( io, "port='3132'" );
 
         cpp::windows::Kernel32::setConsoleCtrlHandler( [&]( DWORD dwCtrlType )
         {
@@ -55,11 +65,15 @@ int main( int argc, const char ** argv )
         // connecting... done.
         // authenticating.... done.
         // ready
-        client.onConnecting( []( grim::net::StrArg address ) { cpp::Log::info( "connecting... " ); } );
-        client.onConnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) { cpp::Log::info( "connect - {}", reason ); } );
-        client.onAuthing( []( grim::net::StrArg addr, grim::net::StrArg access ) { cpp::Log::info( "authing... " ); } );
-        client.onAuth( []( grim::net::StrArg email, uint64_t sessionId, grim::net::Result result, std::string reason ) { cpp::Log::info( "auth. " ); } );
-        client.onReady( []( grim::net::StrArg addr, grim::net::Result result, std::string reason )
+        client.onConnecting( []( grim::net::StrArg address ) 
+            { cpp::Log::info( "connecting... " ); } );
+        client.onConnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) 
+            { cpp::Log::info( "connect - {}", reason ); } );
+        client.onAuthing( []( grim::net::StrArg addr, grim::net::StrArg access ) 
+            { cpp::Log::info( "authing... " ); } );
+        client.onAuth( []( grim::net::StrArg email, uint64_t sessionId, grim::net::Result result ) 
+            { cpp::Log::info( "auth. " ); } );
+        client.onReady( []( grim::net::Result result )
             {
                 cpp::Log::info( "ready. " );
                 //sampleAPI.hello( []( ) { } );
@@ -67,7 +81,6 @@ int main( int argc, const char ** argv )
         client.onDisconnect( []( grim::net::StrArg addr, grim::net::Result result, std::string reason ) { cpp::Log::info( "disconnect - {}", reason ); } );
         client.open( io, "localhost:65432", "monkeysmarts@gmail.com", "[user access]" );
 
-        grim::net::Result result;
         std::string reason;
 
         std::string address;

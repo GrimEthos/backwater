@@ -10,8 +10,11 @@ module;
 export module grim.net.session_server;
 
 import cpp.random;
+import cpp.log;
+import cpp.asio.ip;
 import cpp.asio.tcp;
 import grim.arch.net;
+import grim.auth;
 
 export namespace grim::net
 {
@@ -23,17 +26,33 @@ export namespace grim::net
 
         void                                open(
                                                 cpp::AsyncContext & io,
-                                                StrArg listenAddress,
-                                                StrArg email,
-                                                uint8_t nodeId ) override;
+                                                StrArg listenAddress4,
+                                                StrArg listenAddress6,
+                                                StrArg email ) override;
         void                                close( ) override;
 
         void                                onAuthing( AuthingFn ) override;
         void                                onAuth( AuthFn ) override;
         void                                onReady( ReadyFn ) override;
 
-        void                                onConnect( ConnectFn ) override;
-        void                                onDisconnect( ConnectFn ) override;
+        void                                auth(
+                                                int timeoutSeconds,
+                                                AuthFn ) override;
+        bool                                auth(
+                                                int timeoutSeconds,
+                                                StrOut email,
+                                                uint64_t * sessionId,
+                                                Result * result ) override;
+
+        void                                ready(
+                                                int timeoutSeconds,
+                                                ReadyFn ) override;
+        bool                                ready(
+                                                int timeoutSeconds,
+                                                Result * result ) override;
+
+        void                                onConnect( StrArg ip ) override;
+        void                                onDisconnect( StrArg ip ) override;
 
         void                                onHello( StrArg ip, uint64_t authToken, int nodeId ) override;
         void                                onRello( StrArg ip, uint64_t sessionId, int nodeId ) override;
@@ -49,9 +68,18 @@ export namespace grim::net
         class                               Client;
 
     private:
-        void                                onConnect( std::error_code acceptError, const std::string & addr );
-        void                                onReceive( const std::string & addr, std::string & recvBuffer );
-        void                                onDisconnect( const std::string & addr, std::error_code reason );
+        void                                notifyAuthing( );
+        void                                notifyAuth( );
+        void                                notifyReady( );
+
+        void                                doAuthLogin( );
+        void                                authLogin( grim::auth::Result result, grim::auth::AuthToken authToken );
+        void                                doAuthReady( );
+        void                                authReady( grim::auth::Result result );
+        void                                doListen( );
+        void                                connect( std::error_code acceptError, const std::string & addr );
+        void                                receive( const std::string & addr, std::string & recvBuffer );
+        void                                disconnect( const std::string & addr, std::error_code reason );
 
     private:
         struct                              Detail;
@@ -94,38 +122,38 @@ export namespace grim::net
     class SessionServer::Data
     {
     public:
-        ResultCode                          connected( std::string clientAddr );
-        ResultCode                          disconnected( std::string clientAddr );
-        ResultCode                          hello(
+        Result                              connected( std::string clientAddr );
+        Result                              disconnected( std::string clientAddr );
+        Result                              hello(
                                                 std::string clientAddr,
                                                 uint64_t authToken,
                                                 int nodeId,
                                                 uint64_t * sessionId );
-        ResultCode                          rello(
+        Result                              rello(
                                                 std::string clientAddr,
                                                 uint64_t sessionId );
 
-        ResultCode                          auth(
+        Result                              auth(
                                                 std::string clientAddr,
                                                 uint64_t authToken,
                                                 std::string extAddr,
                                                 uint64_t * sessionId );
-        ResultCode                          reauth(
+        Result                              reauth(
                                                 std::string clientAddr,
                                                 uint64_t sessionId,
                                                 std::string extAddr,
                                                 std::string * oldExtAddr );
-        ResultCode                          authServerNode(
+        Result                              authServerNode(
                                                 std::string clientAddr,
                                                 uint64_t sessionId,
                                                 std::string svcName, int nodeId );
 
-        ResultCode                          openUdp(
+        Result                              openUdp(
                                                 uint64_t sessionId,
                                                 std::string intAddr,
                                                 std::string udpAddr );
-        ResultCode                          closeUdp( uint64_t sessionId );
-        ResultCode                          lookupUdp(
+        Result                              closeUdp( uint64_t sessionId );
+        Result                              lookupUdp(
                                                 uint64_t sessionId,
                                                 std::string * extAddr,
                                                 std::string * intAddr,
@@ -153,24 +181,23 @@ export namespace grim::net
         using                               SessionSet = std::set<uint64_t>;
         using                               SessionUdpMap = std::map<uint64_t, SessionUdpInfo>;
     private:
-
-        ResultCode                          verifyConnection(
+        Result                              verifyConnection(
                                                 const std::string & clientAddr,
                                                 uint64_t * sessionId );
-        ResultCode                          verifyServer(
+        Result                              verifyServer(
                                                 uint64_t sessionId,
                                                 std::string_view * service,
                                                 int * nodeId );
-        ResultCode                          verifySession(
+        Result                              verifySession(
                                                 uint64_t sessionId,
                                                 std::string_view * extAddr,
                                                 std::string_view * email,
                                                 uint64_t * userId,
                                                 uint64_t * proxySessionId );
-        ResultCode                          verifyServerNetwork(
+        Result                              verifyServerNetwork(
                                                 std::string serviceName,
                                                 std::string addr );
-        ResultCode                          grimauth(
+        Result                              grimauth(
                                                 const std::string & extAddr,
                                                 uint64_t authToken,
                                                 const std::string & svc,
@@ -194,6 +221,13 @@ export namespace grim::net
 
 namespace grim::net
 {
+    const char * AuthServiceId = "grimethos.com";
+    const char * ProxyServiceId = "proxy.grimethos.com";
+    std::map<std::string, std::vector<std::string>> ServiceNetwork =
+    {
+        { ProxyServiceId, { } },
+    };
+
     bool operator<( const SessionServer::Data::ServerNode & x, const SessionServer::Data::ServerNode & y ) {
         return std::tie( x.service, x.nodeId ) < std::tie( y.service, y.nodeId );
     }
@@ -205,63 +239,287 @@ namespace grim::net
 
     struct SessionServer::Detail
     {
-        uint16_t                            port;
-        Data                                data;
+        std::string                         email;
+        std::string                         bindAddress4;
+        std::string                         bindAddress6;
+        cpp::AsyncContext                   io;
         cpp::TcpServer                      tcp;
+        grim::auth::Client                  grimauth;
+        grim::auth::AuthToken               authToken;
+
+        AuthingFn                           onAuthingHandler;
+        AuthFn                              onAuthHandler;
+        ReadyFn                             onReadyHandler;
+        ConnectFn                           onConnectHandler;
+        DisconnectFn                        onDisconnectHandler;
+
+        AuthFn                              authHandler;
+        ReadyFn                             readyHandler;
+        cpp::AsyncTimer                     handlerTimer;
+
+        uint64_t                            isAuthed : 1;
+        uint64_t                            isReady : 1;
+
+        Data                                data;
     };
 
-    SessionServer::SessionServer( )
+    SessionServer::SessionServer( ) :
+        detail( std::make_unique<Detail>() )
     {
     }
 
-    void SessionServer::open( 
+    void SessionServer::open(
             cpp::AsyncContext & io,
-            StrArg listenAddress,
-            StrArg email,
-            uint8_t nodeId )
+            StrArg listenAddress4,
+            StrArg listenAddress6,
+            StrArg email )
     {
-        using namespace std::placeholders;
+        detail->isAuthed = false;
+        detail->isReady = false;
 
-
-
-        auto config = cpp::bit::Object::decode( configText );
-        detail->port = config.get( "port" ).asDecimal( );
-
-        std::string keyPem = "";
-        std::string certPem = "";
-        std::string dhpPem = "";
-
-        detail->tcp.open(
-            *io,
-            detail->port,
-            std::bind( &SessionServer::onConnect, this, _1, _2 ),
-            std::bind( &SessionServer::onReceive, this, _1, _2 ),
-            std::bind( &SessionServer::onDisconnect, this, _1, _2 ),
-            "localhost",
-            cpp::TcpVersion::v6,
-            keyPem,
-            certPem,
-            dhpPem );
+        detail->io = io;
+        detail->bindAddress4 = listenAddress4;
+        detail->bindAddress6 = listenAddress6;
+        detail->email = email;
+        detail->grimauth.setAsyncContext( io );
+        doAuthLogin( );
     }
 
     void SessionServer::close( )
     {
         detail->tcp.close( );
-        detail->port = 0;
     }
 
-    void SessionServer::onConnect( std::error_code acceptError, const std::string & addr )
+    void SessionServer::onAuthing( AuthingFn fn )
+    {
+        detail->onAuthingHandler = fn;
+    }
+
+    void SessionServer::onAuth( AuthFn fn )
+    {
+        detail->onAuthHandler = fn;
+    }
+
+    void SessionServer::onReady( ReadyFn fn )
+    {
+        detail->onReadyHandler = fn;
+    }
+
+    void SessionServer::auth( int timeoutSeconds, AuthFn fn )
+    {
+        // if isReady, post result immediately
+        if ( detail->isAuthed )
+            { detail->io.post( [this, fn]( ) { fn( detail->email, 0, Result::Ok ); } ); return; }
+
+        // start a timer that will return timeout if it elapses before the readyHandler is called
+        detail->authHandler = fn;
+        detail->handlerTimer = detail->io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [this]( )
+            { detail->authHandler( detail->email, 0, Result::Timeout ); } );
+    }
+
+    bool SessionServer::auth(
+        int timeoutSeconds,
+        StrOut email,
+        uint64_t * sessionId,
+        Result * result )
+    {
+        *result = Result::Ok;
+        if ( !detail->isAuthed )
+        {
+            auto isAuthed = detail->io.createCondition<Result>( );
+            ready( timeoutSeconds, [&]( Result result )
+                { isAuthed.notify( result ); } );
+            *result = isAuthed.wait( );
+        }
+        *email = detail->email;
+        *sessionId = 0;
+
+        return *result == Result::Ok;
+    }
+
+    void SessionServer::ready( int timeoutSeconds, ReadyFn fn )
+    {
+        // if isReady, post result immediately
+        if ( detail->isReady )
+            { detail->io.post( [fn]( ) { fn( Result::Ok ); } ); return; }
+
+        // start a timer that will return timeout if it elapses before the readyHandler is called
+        detail->readyHandler = fn;
+        detail->handlerTimer = detail->io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [this]( ) 
+            { detail->readyHandler( Result::Timeout ); } );
+    }
+
+    bool SessionServer::ready( int timeoutSeconds, Result * result )
+    {
+        *result = Result::Ok;
+        if ( !detail->isReady )
+        {
+            auto isReady = detail->io.createCondition<Result>( );
+            ready( timeoutSeconds, [&]( Result result )
+                { isReady.notify( result ); } );
+            *result = isReady.wait( );
+        }
+        return *result == Result::Ok;
+    }
+
+    void SessionServer::onConnect( StrArg ip )
     {
 
     }
 
-    void SessionServer::onReceive( const std::string & addr, std::string & recvBuffer )
+    void SessionServer::onDisconnect( StrArg ip )
     {
 
     }
 
-    void SessionServer::onDisconnect( const std::string & addr, std::error_code reason )
+    void SessionServer::onHello( StrArg ip, uint64_t authToken, int nodeId )
     {
+
+    }
+    void SessionServer::onRello( StrArg ip, uint64_t sessionId, int nodeId )
+    {
+
+    }
+
+    void SessionServer::onAuth( StrArg ip, StrArg extIp, uint64_t authToken )
+    {
+
+    }
+    void SessionServer::onReauth( StrArg ip, StrArg extIp, uint64_t sessionId )
+    {
+
+    }
+    void SessionServer::onAuthServer( StrArg ip, uint64_t sessionId, StrArg svcName, int nodeId )
+    {
+
+    }
+
+    void SessionServer::onLookupSession( StrArg ip, uint64_t sessionId )
+    {
+
+    }
+    void SessionServer::onLookupServer( StrArg ip, StrArg svcName, int nodeId )
+    {
+
+    }
+
+    void SessionServer::notifyAuthing( )
+    {
+        if ( detail->onAuthingHandler ) 
+            { detail->onAuthingHandler( detail->email, "" ); }
+    }
+
+    void SessionServer::notifyAuth( )
+    {
+        detail->isAuthed = true;
+        detail->handlerTimer.cancel( );
+        if ( detail->onAuthHandler )
+            { detail->onAuthHandler( detail->email, 0, Result::Ok ); }
+        if ( detail->authHandler )
+            { detail->authHandler( detail->email, 0, Result::Ok ); }
+    }
+
+    void SessionServer::notifyReady( )
+    {
+        detail->isReady = true;
+        detail->handlerTimer.cancel( );
+        if ( detail->onReadyHandler )
+            { detail->onReadyHandler( Result::Ok ); }
+        if ( detail->readyHandler )
+            { detail->readyHandler( Result::Ok ); }
+    }
+
+    void SessionServer::doAuthLogin( )
+    {
+        using namespace std::placeholders;
+        int options = grim::auth::LoginOption::Default;
+        detail->grimauth.login(
+            grim::auth::UserEmail{ detail->email },
+            grim::auth::ServiceId{ "backwater.grimethos.com" },
+            options,
+            5,
+            std::bind(&SessionServer::authLogin, this, _1, _2));
+        notifyAuthing( );
+    }
+
+    void SessionServer::authLogin( grim::auth::Result result, grim::auth::AuthToken authToken )
+    {
+        using grim::auth::Result;
+
+        switch ( result )
+        {
+        case Result::Ok:
+            detail->authToken = authToken;
+            doAuthReady( );
+            break;
+        case Result::Pending:
+            // this shouldn't happen
+            break;
+        case Result::Denied:
+        case Result::Timeout:
+            break;
+        case Result::Retry:
+            detail->io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doAuthLogin( ); } );
+            break;
+        }
+    }
+
+    void SessionServer::doAuthReady( )
+    {
+        using namespace std::placeholders;
+
+        notifyAuth( );
+
+        int options = grim::auth::LoginOption::Default;
+        detail->grimauth.authInit(
+            grim::auth::AuthToken{ detail->authToken },
+            std::bind( &SessionServer::authReady, this, _1 ) );
+    }
+
+    void SessionServer::authReady( grim::auth::Result result )
+    {
+        if ( result != grim::auth::Result::Ok )
+        {
+            cpp::Log::error( "authReady() : result={}", std::to_underlying(result) );
+            detail->io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doAuthLogin( ); } );
+            return;
+        }
+        doListen( );
+    }
+
+    void SessionServer::doListen( )
+    {
+        using namespace std::placeholders;
+        cpp::TcpServer::TlsInfo tlsInfo;
+        detail->tcp.open(
+            detail->io,
+            detail->bindAddress4,
+            detail->bindAddress6,
+            std::bind( &SessionServer::connect, this, _1, _2 ),
+            std::bind( &SessionServer::receive, this, _1, _2 ),
+            std::bind( &SessionServer::disconnect, this, _1, _2 ),
+            nullptr );
+        notifyReady( );
+    }
+
+    void SessionServer::connect( std::error_code acceptError, const std::string & addr )
+    {
+        if ( acceptError )
+        {
+            cpp::Log::error( "connect() : addr='{}' msg='{}'", addr, acceptError.message( ) );
+            return;
+        }
+        cpp::Log::info( "connect() : addr='{}'", addr );
+        detail->data.connected( addr );
+    }
+
+    void SessionServer::receive( const std::string & addr, std::string & recvBuffer )
+    {
+    }
+
+    void SessionServer::disconnect( const std::string & addr, std::error_code reason )
+    {
+        cpp::Log::info( "disconnect() : addr='{}' msg='{}'", addr, reason.message( ) );
 
     }
 
@@ -311,35 +569,35 @@ namespace grim::net
     }
 
 
-    SessionServer::ResultCode SessionServer::Data::verifyConnection( const std::string & clientAddr, uint64_t * sessionId )
+    Result SessionServer::Data::verifyConnection( const std::string & clientAddr, uint64_t * sessionId )
     {
         // verify clientAddr
         auto itr = clientSessions.find( clientAddr );
         if ( itr == clientSessions.end( ) )
-        { return ResultCode::Arg; }
+            { return Result::Arg; }
         *sessionId = itr->second;
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::verifyServer( uint64_t sessionId, std::string_view * service, int * nodeId )
+    Result SessionServer::Data::verifyServer( uint64_t sessionId, std::string_view * service, int * nodeId )
     {
         auto itr = sessionServiceMap.find( sessionId );
         if ( itr == sessionServiceMap.end( ) )
-        { return ResultCode::Arg; }
+            { return Result::Arg; }
         auto & serverNode = itr->second;
         *service = serverNode.service;
         *nodeId = serverNode.nodeId;
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::verifyServerNetwork( std::string serviceName, std::string serverAddr )
+    Result SessionServer::Data::verifyServerNetwork( std::string serviceName, std::string serverAddr )
     {
         auto addr = cpp::Inet4::toTcpEndpoint( serverAddr );
         auto serverNetwork = cpp::Inet4::toAddress( addr.address( ).to_string( ) );
 
         auto itr = ServiceNetwork.find( serviceName );
         if ( itr == ServiceNetwork.end( ) )
-        { return ResultCode::Ok; }
+            { return Result::Ok; }
 
         auto & validNetworks = itr->second;
         bool isSafeNetwork = validNetworks.empty( );
@@ -350,11 +608,11 @@ namespace grim::net
             { isSafeNetwork = true; break; }
         }
         if ( !isSafeNetwork )
-        { return ResultCode::Access; }
-        return ResultCode::Ok;
+            { return Result::Access; }
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::grimauth(
+    Result SessionServer::Data::grimauth(
         const std::string & extAddr,
         uint64_t authToken,
         const std::string & svc,
@@ -373,9 +631,9 @@ namespace grim::net
         }
         else
         {
-            return ResultCode::Access;
+            return Result::Access;
         }
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
     uint64_t SessionServer::Data::makeSessionId( )
@@ -386,7 +644,7 @@ namespace grim::net
         return sessionId;
     }
 
-    SessionServer::ResultCode SessionServer::Data::verifySession(
+    Result SessionServer::Data::verifySession(
         uint64_t sessionId,
         std::string_view * extAddr,
         std::string_view * email,
@@ -395,51 +653,51 @@ namespace grim::net
     {
         auto itr = sessions.find( sessionId );
         if ( itr == sessions.end( ) )
-        { return ResultCode::Arg; }
+        { return Result::Arg; }
         auto & sessionInfo = itr->second;
         *extAddr = sessionInfo.extAddr;
         *email = sessionInfo.email;
         *userId = sessionInfo.userId;
         *proxySessionId = sessionInfo.proxySessionId;
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::connected( std::string clientAddr )
+    Result SessionServer::Data::connected( std::string clientAddr )
     {
         auto itr = clientSessions.find( clientAddr );
         if ( itr != clientSessions.end( ) )
-        { return ResultCode::Arg; }
+        { return Result::Arg; }
         clientSessions[clientAddr] = 0;
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::disconnected( std::string clientAddr )
+    Result SessionServer::Data::disconnected( std::string clientAddr )
     {
         if ( !clientSessions.erase( clientAddr ) )
-        { return ResultCode::Arg; }
-        return ResultCode::Ok;
+            { return Result::Arg; }
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::authClient(
-                                        std::string clientAddr,
-                                        uint64_t authToken,
-                                        int nodeId,
-                                        uint64_t * sessionId )
+    Result SessionServer::Data::hello(
+        std::string clientAddr,
+        uint64_t authToken,
+        int nodeId,
+        uint64_t * sessionId )
     {
         uint64_t clientSessionId = 0;
-        ResultCode result = verifyConnection( clientAddr, &clientSessionId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        Result result = verifyConnection( clientAddr, &clientSessionId );
+        if ( result != Result::Ok )
+            { return result; }
 
         result = verifyServerNetwork( ProxyServiceId, clientAddr );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         uint64_t userId;
         std::string email;
         result = grimauth( clientAddr, authToken, "grimethos.com", &userId, &email );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         uint64_t newSessionId = makeSessionId( );
 
@@ -457,50 +715,50 @@ namespace grim::net
 
         *sessionId = newSessionId;
 
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::reauthClient(
-                                            std::string clientAddr,
-                                            uint64_t sessionId )
+    Result SessionServer::Data::rello(
+        std::string clientAddr,
+        uint64_t sessionId )
     {
         std::string oldAddr;
-        ResultCode result = reauth( clientAddr, sessionId, clientAddr, &oldAddr );
-        if ( result == ResultCode::Ok )
+        Result result = reauth( clientAddr, sessionId, clientAddr, &oldAddr );
+        if ( result == Result::Ok )
         {
             if ( auto itr = clientSessions.find( oldAddr ); itr != clientSessions.end( ) )
-            { clientSessions[oldAddr] = 0; }
+                { clientSessions[oldAddr] = 0; }
             clientSessions[clientAddr] = sessionId;
         }
 
         return result;
     }
 
-    SessionServer::ResultCode SessionServer::Data::auth(
+    Result SessionServer::Data::auth(
         std::string clientAddr,
         uint64_t authToken,
         std::string extAddr,
         uint64_t * sessionId )
     {
         uint64_t clientSessionId = 0;
-        ResultCode result = verifyConnection( clientAddr, &clientSessionId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        Result result = verifyConnection( clientAddr, &clientSessionId );
+        if ( result != Result::Ok )
+            { return result; }
 
         std::string_view clientServiceName;
         int clientNodeId;
         result = verifyServer( clientSessionId, &clientServiceName, &clientNodeId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         if ( clientServiceName != "proxy.grimethos.com" )
-        { return ResultCode::Access; }
+            { return Result::Access; }
 
         uint64_t userId;
         std::string email;
         result = grimauth( extAddr, authToken, "grimethos.com", &userId, &email );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         uint64_t newSessionId = makeSessionId( );
 
@@ -513,42 +771,42 @@ namespace grim::net
         proxySessions[clientSessionId].insert( newSessionId );
 
         *sessionId = newSessionId;
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::reauth(
+    Result SessionServer::Data::reauth(
         std::string clientAddr,
         uint64_t sessionId,
         std::string extAddr,
         std::string * oldExtAddr )
     {
         uint64_t clientSessionId = 0;
-        ResultCode result = verifyConnection( clientAddr, &clientSessionId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        Result result = verifyConnection( clientAddr, &clientSessionId );
+        if ( result != Result::Ok )
+            { return result; }
 
         bool isProxyServer = clientAddr == extAddr;
         if ( isProxyServer )
-        { clientSessionId = sessionId; }
+            { clientSessionId = sessionId; }
 
         std::string_view clientServiceName;
         int clientNodeId;
         result = verifyServer( clientSessionId, &clientServiceName, &clientNodeId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         std::string_view sessionExtAddr;
         std::string_view email;
         uint64_t userId = 0;
         uint64_t proxySessionId = 0;
         result = verifySession( sessionId, &sessionExtAddr, &email, &userId, &proxySessionId );
-        if ( result != ResultCode::Ok )
-        { return result; }
+        if ( result != Result::Ok )
+            { return result; }
 
         auto oldAddr = cpp::Inet4::toTcpEndpoint( sessionExtAddr );
         auto newAddr = cpp::Inet4::toTcpEndpoint( extAddr );
         if ( oldAddr.address( ) != newAddr.address( ) )
-        { return ResultCode::Access; }
+            { return Result::Access; }
 
         SessionInfo & sessionInfo = sessions[sessionId];
         *oldExtAddr = sessionInfo.extAddr;
@@ -566,23 +824,23 @@ namespace grim::net
             sessionInfo.proxySessionId = clientSessionId;
         }
 
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::authServerNode(
+    Result SessionServer::Data::authServerNode(
         std::string clientAddr,
         uint64_t sessionId,
         std::string svcName, int nodeId )
     {
         uint64_t clientSessionId = 0;
-        ResultCode result = verifyConnection( clientAddr, &clientSessionId );
-        if ( result != ResultCode::Ok )
+        Result result = verifyConnection( clientAddr, &clientSessionId );
+        if ( result != Result::Ok )
         { return result; }
 
         std::string_view clientServiceName;
         int clientNodeId;
         result = verifyServer( clientSessionId, &clientServiceName, &clientNodeId );
-        if ( result != ResultCode::Ok )
+        if ( result != Result::Ok )
         { return result; }
 
         std::string_view extAddr;
@@ -590,43 +848,76 @@ namespace grim::net
         uint64_t userId = 0;
         uint64_t proxySessionId = 0;
         result = verifySession( sessionId, &extAddr, &email, &userId, &proxySessionId );
-        if ( result != ResultCode::Ok )
+        if ( result != Result::Ok )
         { return result; }
 
         if ( email != "monkeysmarts@gmail.com" )
-        { return ResultCode::Access; }
+        { return Result::Access; }
 
         result = verifyServerNetwork( svcName, std::string{ extAddr } );
-        if ( result != ResultCode::Ok )
+        if ( result != Result::Ok )
         { return result; }
 
         ServerNode serverNode{ svcName, nodeId };
         serviceSessionMap[serverNode] = sessionId;
         sessionServiceMap[sessionId] = serverNode;
 
-        return ResultCode::Ok;
+        return Result::Ok;
     }
 
-    SessionServer::ResultCode SessionServer::Data::openUdp(
+    Result SessionServer::Data::openUdp(
         uint64_t sessionId,
         std::string intAddr,
         std::string udpAddr )
     {
-        return ResultCode::Access;
+        return Result::Access;
     }
 
-    SessionServer::ResultCode SessionServer::Data::closeUdp( uint64_t sessionId )
+    Result SessionServer::Data::closeUdp( uint64_t sessionId )
     {
-        return ResultCode::Access;
+        return Result::Access;
     }
 
-    SessionServer::ResultCode SessionServer::Data::lookupUdp(
+    Result SessionServer::Data::lookupUdp(
         uint64_t sessionId,
         std::string * extAddr,
         std::string * intAddr,
         std::string * udpAddr,
         uint64_t * key )
     {
-        return ResultCode::Access;
+        return Result::Access;
+    }
+
+
+    namespace test
+    {
+        void testSessionServerData( )
+        {
+            const char * LOCAL_ADDR1 = "10.10.10.1:1";
+            const char * LOCAL_ADDR1_2 = "10.10.10.1:3";
+            const char * LOCAL_ADDR2 = "10.10.10.2:2";
+            const char * REMOTE_ADDR1 = "10.10.10.100:1";
+            const char * REMOTE_ADDR2 = "10.10.10.101:2";
+
+            SessionServer::Data data;
+            data.connected( LOCAL_ADDR1 );
+            data.connected( LOCAL_ADDR2 );
+
+            uint64_t proxySessionId[2];
+            if ( data.hello( LOCAL_ADDR1, 1, 0, &proxySessionId[0] ) != Result::Ok )
+                { throw std::exception{ "data.authClient( LOCAL_ADDR1 )" }; }
+            if ( data.hello( LOCAL_ADDR2, 2, 1, &proxySessionId[1] ) != Result::Ok )
+                { throw std::exception{ "data.authClient( LOCAL_ADDR2 )" }; }
+
+            data.connected( LOCAL_ADDR1_2 );
+            if ( data.rello( LOCAL_ADDR1_2, proxySessionId[0] ) != Result::Ok )
+                { throw std::exception{ "data.reauthClient( LOCAL_ADDR1_2 )" }; }
+
+            uint64_t galaxySessionId;
+            if ( data.auth( LOCAL_ADDR1_2, 1, REMOTE_ADDR1, &galaxySessionId ) != Result::Ok )
+                { throw std::exception{ "data.auth( LOCAL_ADDR1_2, 1, REMOTE_ADDR1 )" }; }
+            if ( data.authServerNode( LOCAL_ADDR1_2, galaxySessionId, "galaxy.backwater.grimethos.com", 0 ) != Result::Ok )
+                { throw std::exception{ "data.authServerNode( LOCAL_ADDR1_2, galaxySessionId )" }; }
+        }
     }
 }

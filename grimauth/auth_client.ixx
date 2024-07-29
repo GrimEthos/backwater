@@ -1,6 +1,7 @@
 module;
 
 #include <exception>
+#include <memory>
 
 export module grim.auth.client;
 
@@ -22,6 +23,9 @@ export namespace grim::auth
         void                                    setAsyncContext( cpp::AsyncContext io );
         void                                    setAuthDataDir( cpp::FilePath authDataDir );
 
+        //! performs timecode() and id(). If necessary (i.e. result == Pending) performs check() in 
+        //! a loop until the user approves or denies the login or a timeout occurs.  If the 
+        //! `LoginOption::Interactive` is set, a browser window to the login console will be opened.
         Result                                  login(
                                                     UserEmail email,
                                                     ServiceId serviceId,
@@ -29,7 +33,7 @@ export namespace grim::auth
                                                     int timeoutSeconds,
                                                     AuthToken * authToken ) override;
 
-        void                                    login(
+        cpp::AsyncCall                          login(
                                                     UserEmail email,
                                                     ServiceId serviceId,
                                                     int options,
@@ -85,33 +89,67 @@ namespace grim::auth
         AuthToken * authToken )
     {
         if ( !m_io.get( ) ) { throw std::exception{ "" }; }
-        return (int)ResultCode::Ok;
+        return Result::Ok;
     }
 
-    void Client::login(
+    struct LoginContext : 
+        public cpp::AsyncCancellable
+    {
+        bool isCancelled = false;
+        cpp::AsyncTimer timer;
+        void cancel( ) override
+        { 
+            isCancelled = true; 
+            timer.cancel( );
+        }
+    };
+
+    cpp::AsyncCall Client::login(
         UserEmail email,
         ServiceId serviceId,
         int options,
         int timeoutSeconds,
-        LoginFn )
+        LoginFn handler )
     {
-
+        auto context = std::make_shared<LoginContext>( );
+        context->timer = m_io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [handler]( ) 
+            { 
+                handler( grim::auth::Result::Timeout, { 0 } ); 
+            } );
+        // to do - all these results are fake
+        if ( email.value == "timeout@test.com" )
+            {  }
+        else if ( email.value == "denied@test.com" )
+            { m_io.post( [=]( ) { context->timer.cancel( ); handler( grim::auth::Result::Denied, { 0 } ); } ); }
+        else if ( email.value == "pending@test.com" )
+            { m_io.post( [=]( ) { context->timer.cancel( ); handler( grim::auth::Result::Pending, { 0 } ); } ); }
+        else if ( email.value == "retry@test.com" )
+            { m_io.post( [=]( ) { context->timer.cancel( ); handler( grim::auth::Result::Retry, { 0 } ); } ); }
+        else
+            { m_io.post( [=]( ) 
+                { 
+                    context->timer.cancel( ); 
+                    handler( grim::auth::Result::Ok, { 1 } );
+                } ); }
+        return context;
     }
 
     void Client::authInit(
         AuthToken serviceAuthToken,
-        authInitFn callback )
+        authInitFn handler )
     {
-
+        // to do - all these results are fake
+        m_io.post( [=]( ) { handler( grim::auth::Result::Ok ); } );
     }
 
     void Client::auth(
         AuthToken serviceToken,
         DeviceIP userIp,
         AuthToken userToken,
-        authFn callback )
+        authFn handler )
     {
-
+        // to do - all these results are fake
+        m_io.post( [=]( ) { handler( grim::auth::Result::Ok, { 1 }, { "monkeysmarts@gmail.com" } ); } );
     }
 
 }

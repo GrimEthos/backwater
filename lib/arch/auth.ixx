@@ -8,6 +8,7 @@ module;
 
 export module grim.arch.auth;
 
+import cpp.asio;
 import cpp.memory;
 import cpp.random;
 import cpp.file;
@@ -32,13 +33,15 @@ export namespace grim::auth
     struct                                  AuthToken   { uint64_t value; };
     struct                                  ServiceId   { std::string value; };
 
-    using                                   Result = int;
+    struct LoginOption
+    {
+        static constexpr int                Default     = 0;
+        static constexpr int                Interactive = 1 << 0;
+    };
+    enum class                              Result { Ok, Pending, Denied, Timeout, Retry };
 
     struct IClient
-    {
-        enum class                          LoginOption { Default, Interactive };
-        enum class                          ResultCode { Ok, Pending, Denied, Timeout, Retry };
-        
+    {        
         //! login
         virtual Result                      login(
                                                 UserEmail email,
@@ -46,8 +49,11 @@ export namespace grim::auth
                                                 int options,
                                                 int timeoutSeconds,
                                                 AuthToken * authToken ) = 0;
+        //! performs timecode() and id(). If necessary (i.e. result == Pending) performs check() in 
+        //! a loop until the user approves or denies the login or a timeout occurs.  If the 
+        //! `LoginOption::Interactive` is set, a browser window to the login console will be opened.
         using                               LoginFn = std::function<void( Result, AuthToken )>;
-        virtual void                        login(
+        virtual cpp::AsyncCall              login(
                                                 UserEmail email,
                                                 ServiceId serviceId,
                                                 int options,

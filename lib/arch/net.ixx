@@ -15,16 +15,19 @@ export namespace grim::net
 {
     using                                   StrArg = const cpp::Memory &;
     using                                   StrOut = std::string *;
-    using                                   Result = int;
+    using                                   ResultValue = uint8_t;
+    constexpr std::endian                   ByteOrder = std::endian::big;
 
-    enum ResultCode {
+    enum class Result : ResultValue {
         Ok = 0,                             // 
-        NoConnection = 0xff,                // no connection to proxy
-        NoRoute = 0xfe,                     // to session can't be reached
-        NoAuth = 0xfd,                      // session can't be reached
+
+        Arg = 0xf0,                         // an argument was invalid
+        Access = 0xfa,                      // no connection to proxy
+        Route = 0xfb,                       // to session can't be reached
         Retry = 0xfc,                       // rate limiting
-        More = 0xfb,                        // multi-part message, bind will invoke same callback multiple times
-        Timeout = 0xfa,                     // timeout expired
+        More = 0xfd,                        // multi-part message, bind will invoke same callback multiple times
+        Timeout = 0xfe,                     // timeout expired
+        Unknown = 0xff
     };
 
     struct Message
@@ -39,22 +42,11 @@ export namespace grim::net
 
     using                                   BindFn = std::function<void( const Message & msg, StrArg data )>;
     using                                   ConnectingFn = std::function<void( StrArg addr )>;
-    using                                   ConnectFn = std::function<void(
-                                                StrArg addr,
-                                                Result result, std::string reason )>;
-    using                                   AuthingFn = std::function<void(
-                                                StrArg addr,
-                                                StrArg access )>;
-    using                                   AuthFn = std::function<void(
-                                                StrArg email,
-                                                uint64_t sessionId,
-                                                Result result, std::string reason )>;
-    using                                   ReadyFn = std::function<void(
-                                                StrArg addr,
-                                                Result result, std::string reason )>;
-    using                                   DisconnectFn = std::function<void(
-                                                StrArg addr,
-                                                Result result, std::string reason )>;
+    using                                   ConnectFn = std::function<void( StrArg addr, Result result, std::string reason )>;
+    using                                   AuthingFn = std::function<void( StrArg email, StrArg access )>;
+    using                                   AuthFn = std::function<void( StrArg email, uint64_t sessionId, Result result )>;
+    using                                   ReadyFn = std::function<void( Result result )>;
+    using                                   DisconnectFn = std::function<void( StrArg addr, Result result, std::string reason )>;
 
 
     //! Used as interface for service specific APIs.
@@ -72,6 +64,7 @@ export namespace grim::net
                                                 StrArg access ) = 0;
         virtual void                        close( ) = 0;
 
+        //! event handlers
         virtual void                        onConnecting( ConnectingFn ) = 0;
         virtual void                        onConnect( ConnectFn ) = 0;
         virtual void                        onAuthing( AuthingFn ) = 0;
@@ -79,6 +72,8 @@ export namespace grim::net
         virtual void                        onReady( ReadyFn ) = 0;
         virtual void                        onDisconnect( DisconnectFn ) = 0;
 
+        //! connect is a result handler for `open` which returns if/when
+        //! a connection has been established
         virtual void                        connect(
                                                 int timeoutSeconds,
                                                 ConnectFn ) = 0;
@@ -86,7 +81,8 @@ export namespace grim::net
                                                 int timeoutSeconds,
                                                 StrOut address,
                                                 Result * result, StrOut reason ) = 0;
-
+        //! auth is a result handler for `open` which returns if/when
+        //! an authorization result is available
         virtual void                        auth(
                                                 int timeoutSeconds,
                                                 AuthFn ) = 0;
@@ -94,14 +90,15 @@ export namespace grim::net
                                                 int timeoutSeconds,
                                                 StrOut email,
                                                 uint64_t * sessionId,
-                                                Result * result, StrOut reason ) = 0;
-
+                                                Result * result ) = 0;
+        //! ready is a result handler for `open` which returns if/when
+        //! the client is connected & auth'd and ready to send messages
         virtual void                        ready(
                                                 int timeoutSeconds,
                                                 ReadyFn ) = 0;
         virtual bool                        ready(
                                                 int timeoutSeconds,
-                                                Result * result, StrOut reason ) = 0;
+                                                Result * result ) = 0;
 
         virtual void                        send(
                                                 uint64_t toSessionId,
@@ -122,6 +119,21 @@ export namespace grim::net
                                                 cpp::Memory data ) = 0;
     };
 
+    struct IProxyApi
+    {
+        using                               HelloReply = std::function<void( Result result, StrArg email, uint64_t sessionId )>;
+        virtual void                        hello( auth::AuthToken authToken, HelloReply reply ) = 0;
+        
+        using                               RelloReply = std::function<void( Result result )>;
+        virtual void                        rello( uint64_t sessionId, RelloReply reply ) = 0;
+        
+        using                               AuthServerReply = std::function<void( Result result, StrArg email, uint64_t sessionId )>;
+        virtual void                        authServer( StrArg svcName, int nodeId, AuthServerReply reply ) = 0;
+        
+        using                               FindServerReply = std::function<void( Result result, uint64_t sessionId )>;
+        virtual void                        findServer( StrArg svcName, int nodeId, FindServerReply reply ) = 0;
+    };
+
     struct IProxyServer
     {
         virtual void                        open(
@@ -140,17 +152,37 @@ export namespace grim::net
     {
         virtual void                        open(
                                                 cpp::AsyncContext & io,
-                                                StrArg listenAddress,
-                                                StrArg email,
-                                                uint8_t nodeId ) = 0;
+                                                StrArg listenAddress4,
+                                                StrArg listenAddress6,
+                                                StrArg email ) = 0;
         virtual void                        close( ) = 0;
 
+        //! event handlers
         virtual void                        onAuthing( AuthingFn ) = 0;
         virtual void                        onAuth( AuthFn ) = 0;
         virtual void                        onReady( ReadyFn ) = 0;
 
-        virtual void                        onConnect( ConnectFn ) = 0;
-        virtual void                        onDisconnect( ConnectFn ) = 0;
+        //! auth is a result handler for `open` which returns if/when
+        //! an authorization result is available
+        virtual void                        auth(
+                                                int timeoutSeconds,
+                                                AuthFn ) = 0;
+        virtual bool                        auth(
+                                                int timeoutSeconds,
+                                                StrOut email,
+                                                uint64_t * sessionId,
+                                                Result * result ) = 0;
+        //! ready is a result handler for `open` which returns if/when
+        //! the server is auth'd and listening for connections
+        virtual void                        ready(
+                                                int timeoutSeconds,
+                                                ReadyFn ) = 0;
+        virtual bool                        ready(
+                                                int timeoutSeconds,
+                                                Result * result ) = 0;
+
+        virtual void                        onConnect( StrArg ip ) = 0;
+        virtual void                        onDisconnect( StrArg ip ) = 0;
 
         virtual void                        onHello( StrArg ip, uint64_t authToken, int nodeId ) = 0;
         virtual void                        onRello( StrArg ip, uint64_t sessionId, int nodeId ) = 0;
