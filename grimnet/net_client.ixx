@@ -1,7 +1,9 @@
 module;
 
+#include <cassert>
 #include <chrono>
 #include <functional>
+#include <map>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -22,11 +24,17 @@ export namespace grim::net
     public:
         void                                open(
                                                 cpp::AsyncContext & io,
-                                                StrArg addrs,
                                                 StrArg email,
-                                                StrArg access ) override;
-        void                                close( ) override;
+                                                StrArg addrs );
+        void                                open(
+                                                cpp::AsyncContext & io,
+                                                StrArg email,
+                                                auth::AuthToken authToken,
+                                                StrArg addrs );
+        void                                close( );
 
+        void                                onIdentifying( IdentifyingFn ) override;
+        void                                onIdentify( IdentifyFn ) override;
         void                                onConnecting( ConnectingFn ) override;
         void                                onConnect( ConnectFn ) override;
         void                                onAuthing( AuthingFn ) override;
@@ -34,67 +42,63 @@ export namespace grim::net
         void                                onReady( ReadyFn ) override;
         void                                onDisconnect( DisconnectFn ) override;
 
-        void                                connect(
+        void                                identify( int timeoutSeconds, IdentifyFn );
+        bool                                identify(
                                                 int timeoutSeconds,
-                                                ConnectFn ) override;
+                                                Result * result,
+                                                StrOut email,
+                                                StrOut pendingUrl );
+        void                                connect( int timeoutSeconds, ConnectFn ) override;
         bool                                connect(
                                                 int timeoutSeconds,
+                                                Result * result,
                                                 StrOut address,
-                                                Result * result, StrOut reason ) override;
-
-        void                                auth(
-                                                int timeoutSeconds,
-                                                AuthFn ) override;
+                                                StrOut reason ) override;
+        void                                auth( int timeoutSeconds, AuthFn ) override;
         bool                                auth(
                                                 int timeoutSeconds,
+                                                Result * result,
                                                 StrOut email,
-                                                uint64_t * sessionId,
-                                                Result * result ) override;
-
-        void                                ready(
-                                                int timeoutSeconds,
-                                                ReadyFn ) override;
+                                                uint64_t * sessionId ) override;
+        void                                ready( int timeoutSeconds, ReadyFn ) override;
         bool                                ready(
                                                 int timeoutSeconds,
                                                 Result * result ) override;
 
         void                                send(                               // request
                                                 uint64_t toSessionId,
-                                                uint16_t type,
+                                                uint8_t type,
                                                 cpp::Memory data,
                                                 BindFn bindFunction ) override;
         void                                send(                               // reply
                                                 uint64_t toSessionId,
+                                                uint16_t moniker,
                                                 uint16_t bind,
-                                                uint16_t type,
-                                                uint16_t result,
+                                                uint8_t type,
+                                                uint8_t result,
                                                 cpp::Memory data ) override;
 
-        void                                openUdp( uint16_t port ) override;
-        void                                closeUdp( ) override;
-        void                                sendUdp(
-                                                uint64_t toSessionId,
-                                                cpp::Memory data ) override;
+        cpp::AsyncContext &                 getAsyncContext( );
     private:
+        void                                notifyIdentifying( const std::string & email );
+        void                                notifyIdentify( net::Result result, const std::string & email, const std::string & pendingUrl );
         void                                notifyConnecting( const std::string & addr );
-        void                                notifyConnect( const std::string & addr, net::Result result, const std::string & reason );
-        void                                notifyAuthing( const std::string & email, const std::string & privs );
-        void                                notifyAuth( StrArg email, uint64_t sessionId, Result result );
+        void                                notifyConnect( net::Result result, const std::string & addr, const std::string & reason );
+        void                                notifyAuthing( const std::string & email );
+        void                                notifyAuth( Result result, StrArg email, uint64_t sessionId );
         void                                notifyReady( );
 
+        void                                doIdentify( );
+        void                                didIdentify( grim::auth::Result result, grim::auth::AuthToken authToken );
         void                                doConnect( );
-        void                                doAuthLogin( );
-        void                                onAuthLogin( grim::auth::Result result, grim::auth::AuthToken authToken );
         void                                doHello( );
-        void                                onHello( Result result, StrArg email, uint64_t sessionId );
+        void                                didHello( Result result, StrArg email, uint64_t sessionId );
         void                                doRello( );
-        void                                onRello( Result result );
+        void                                didRello( Result result );
         void                                authReady( grim::auth::Result result );
 
-
-        void                                onConnect( StrArg addr, Result result, std::string reason );
-        void                                onAuth( StrArg email, uint64_t sessionId, Result result );
-        void                                onReady( Result result );
+        void                                handlerStart( int timeoutSeconds, std::function<void( )> fn );
+        Result                              handlerWait( );
     private:
         cpp::AsyncContext                   io;
         std::vector<std::string>            addrs;
@@ -105,6 +109,8 @@ export namespace grim::net
         grim::auth::Client                  grimauth;
         grim::auth::AuthToken               authToken;
 
+        IdentifyingFn                       onIdentifyingHandler;
+        IdentifyFn                          onIdentifyHandler;
         ConnectingFn                        onConnectingHandler;
         ConnectFn                           onConnectHandler;
         AuthingFn                           onAuthingHandler;
@@ -112,10 +118,14 @@ export namespace grim::net
         ReadyFn                             onReadyHandler;
         DisconnectFn                        onDisconnectHandler;
 
+        IdentifyFn                          identifyHandler;
         ConnectFn                           connectHandler;
         AuthFn                              authHandler;
         ReadyFn                             readyHandler;
+        cpp::AsyncTimer                     handlerTimer;
+        cpp::AsyncCondition<Result>         handlerCond;
 
+        uint64_t                            isIdentified : 1;
         uint64_t                            isConnected : 1;
         uint64_t                            isAuthed : 1;
         uint64_t                            isReady : 1;
@@ -123,39 +133,61 @@ export namespace grim::net
         std::string                         addr;
         uint64_t                            sessionId;
         uint16_t                            bindIndex;
+        std::map<uint16_t, BindFn>          bindMap;
     };
 }
 
 namespace grim::net
 {
-    struct ProxyApi : public IProxyApi 
+    struct ProxyApi : public INetServerApi, IProxyApi 
     {
         enum class                          MessageType { Hello, Rello, AuthServer, FindServer };
 
                                             ProxyApi( Client & client );
 
-        void                                hello( auth::AuthToken authToken, HelloReply reply ) override;
-        void                                rello( uint64_t sessionId, RelloReply reply ) override;
+        void                                hello( auth::AuthToken authToken, OnHello ) override;
+        void                                rello( uint64_t sessionId, OnRello ) override;
         void                                authServer( StrArg svcName, int nodeId, AuthServerReply reply ) override;
         void                                findServer( StrArg svcName, int nodeId, FindServerReply reply ) override;
-
     private:
         Client & m_client;
     };
 
     void Client::open(
         cpp::AsyncContext & io,
-        StrArg addrs,
         StrArg email,
-        StrArg access )
+        StrArg addrs )
+    {
+        open( io, email, auth::AuthToken{ 0 }, addrs );
+    }
+
+    void Client::open(
+        cpp::AsyncContext & io,
+        StrArg email,
+        auth::AuthToken authToken,
+        StrArg addrs )
     {
         this->io = io;
+        this->grimauth.setAsyncContext( io );
         for ( auto & addr : addrs.split( "," ) )
             { this->addrs.push_back( addr ); }
         this->email = email;
+        this->authToken = authToken;
         this->access = access;
+        this->sessionId = 0;
 
-        doConnect( );
+        if ( this->authToken.value == 0 )
+            { doIdentify( ); }
+        else
+            { doConnect( ); }
+    }
+
+    Result toResult( uint64_t code ) {
+        if ( code == (uint64_t)Result::Ok )
+            { return Result::Ok; }
+        if ( code >= (uint64_t)Result::Arg && code < (uint64_t)Result::Unknown )
+            { return (Result)code; }
+        return Result::Unknown;
     }
 
     Result toResult( std::error_code ec ) {
@@ -167,32 +199,46 @@ namespace grim::net
             { return Result::Route; }
     }
 
+    void Client::notifyIdentifying( const std::string & email )
+    {
+        if ( onIdentifyingHandler )
+            { onIdentifyingHandler( email ); }
+    }
+
+    void Client::notifyIdentify( net::Result result, const std::string & email, const std::string & pendingUrl )
+    {
+        if ( onIdentifyHandler )
+            { onIdentifyHandler( result, addr, pendingUrl ); }
+        if ( identifyHandler )
+            { identifyHandler( result, addr, pendingUrl ); }
+    }
+
     void Client::notifyConnecting( const std::string & addr )
     {
         if ( onConnectingHandler )
             { onConnectingHandler( addr ); }
     }
 
-    void Client::notifyConnect( const std::string & addr, net::Result result, const std::string & reason )
+    void Client::notifyConnect( net::Result result, const std::string & addr, const std::string & reason )
     {
         if ( onConnectHandler )
-            { onConnectHandler( addr, result, reason ); }
+            { onConnectHandler( result, addr, reason ); }
         if ( connectHandler )
-            { connectHandler( addr, result, reason ); }
+            { connectHandler( result, addr, reason ); }
     }
 
-    void Client::notifyAuthing( const std::string & email, const std::string & privs )
+    void Client::notifyAuthing( const std::string & email )
     {
         if ( onAuthingHandler )
-            { onAuthingHandler( email, privs ); }
+            { onAuthingHandler( email ); }
     }
 
-    void Client::notifyAuth( StrArg email, uint64_t sessionId, Result result )
+    void Client::notifyAuth( net::Result result, StrArg email, uint64_t sessionId )
     {
         if ( onAuthHandler )
-            { onAuthHandler( email, sessionId, result ); }
+            { onAuthHandler( result, email, sessionId ); }
         if ( authHandler )
-            { authHandler( email, sessionId, result ); }
+            { authHandler( result, email, sessionId ); }
     }
 
     void Client::notifyReady( )
@@ -201,6 +247,57 @@ namespace grim::net
             { onReadyHandler( Result::Ok ); }
         if ( readyHandler )
             { readyHandler( Result::Ok ); }
+    }
+
+    void Client::doIdentify( )
+    {
+        using namespace std::placeholders;
+        int options = grim::auth::LoginOption::Interactive;
+        int timeout = 5;
+        if ( authToken.value )
+        {
+            grimauth.login(
+                this->authToken,
+                timeout,
+                std::bind( &Client::didIdentify, this, _1, _2 ) );
+        }
+        else
+        {
+            grimauth.login(
+                grim::auth::UserEmail{ email },
+                grim::auth::ServiceId{ "backwater.grimethos.com" },
+                options,
+                5,
+                std::bind( &Client::didIdentify, this, _1, _2 ) );
+        }
+        notifyIdentifying( email );
+    }
+
+    void Client::didIdentify( grim::auth::Result result, grim::auth::AuthToken authToken )
+    {
+        std::string pendingUrl;
+        switch ( result )
+        {
+        case grim::auth::Result::Ok:
+            this->authToken = authToken;
+            notifyIdentify( Result::Ok, email, "" );
+            doConnect( );
+            break;
+        case grim::auth::Result::Pending:
+            notifyIdentify( Result::Ok, email, pendingUrl );
+            doConnect( );
+            break;
+        case grim::auth::Result::Denied:
+            notifyIdentify( Result::Access, email, pendingUrl );
+            break;
+        case grim::auth::Result::Timeout:
+            notifyIdentify( Result::Timeout, email, pendingUrl );
+            io.waitFor( cpp::Duration::ofSeconds( 10 ), [this]( ) { doIdentify( ); } );
+        case grim::auth::Result::Retry:
+            notifyIdentify( Result::Retry, email, pendingUrl );
+            io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doIdentify( ); } );
+            break;
+        }
     }
 
     void Client::doConnect( )
@@ -217,7 +314,7 @@ namespace grim::net
                 if ( connectResult )
                     { doConnect( ); }
                 else if ( sessionId == 0 )
-                    { doAuthLogin( ); }
+                    { doHello( ); }
                 else
                     { doRello( ); }
             },
@@ -226,6 +323,7 @@ namespace grim::net
             },
             [this]( std::error_code reason )
             {
+                isConnected = isAuthed = isReady = false;
                 if ( onDisconnectHandler )
                     { onDisconnectHandler( this->addr, toResult( reason ), reason.message( ) ); }
                 doConnect( );
@@ -233,50 +331,15 @@ namespace grim::net
             }, caFilename );
     }
 
-    void Client::doAuthLogin( )
-    {
-        using namespace std::placeholders;
-        int options = grim::auth::LoginOption::Interactive;
-        grimauth.login(
-            grim::auth::UserEmail{ email },
-            grim::auth::ServiceId{ "backwater.grimethos.com" },
-            options,
-            5,
-            std::bind( &Client::onAuthLogin, this, _1, _2 ) );
-        notifyAuthing( email, "" );
-    }
-
-    void Client::onAuthLogin( grim::auth::Result result, grim::auth::AuthToken authToken )
-    {
-        using grim::auth::Result;
-
-        switch ( result )
-        {
-        case Result::Ok:
-            authToken = authToken;
-            doHello( );
-            break;
-        case Result::Pending:
-            // this shouldn't happen
-            break;
-        case Result::Denied:
-        case Result::Timeout:
-            break;
-        case Result::Retry:
-            io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doAuthLogin( ); } );
-            break;
-        }
-    }
-
     void Client::doHello( )
     {
         using namespace std::placeholders;
 
         ProxyApi proxy{ *this };
-        proxy.hello( authToken, std::bind( &Client::onHello, this, _1, _2, _3 ) );
+        proxy.hello( authToken, std::bind( &Client::didHello, this, _1, _2, _3 ) );
     }
 
-    void Client::onHello( Result result, StrArg email, uint64_t sessionId )
+    void Client::didHello( Result result, StrArg email, uint64_t sessionId )
     {
         if ( result != Result::Ok )
         {
@@ -284,6 +347,10 @@ namespace grim::net
             io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doAuthLogin( ); } );
             return;
         }
+        this->sessionId = sessionId;
+        this->isAuthed = true;
+        notifyAuth( this->email, this->sessionId, result );
+        notifyReady( );
     }
 
     void Client::doRello( )
@@ -291,16 +358,19 @@ namespace grim::net
         using namespace std::placeholders;
 
         ProxyApi proxy{ *this };
-        proxy.rello( sessionId, std::bind( &Client::onRello, this, _1 ) );
+        proxy.rello( sessionId, std::bind( &Client::didRello, this, _1 ) );
     }
 
-    void Client::onRello( Result result )
+    void Client::didRello( Result result )
     {
         if ( result != Result::Ok )
         {
             doAuthLogin( );
             return;
         }
+        this->isAuthed = true;
+        notifyAuth( this->email, this->sessionId, result );
+        notifyReady( );
     }
 
     void Client::onConnect( StrArg address, Result result, std::string reason )
@@ -363,6 +433,18 @@ namespace grim::net
         onDisconnectHandler = std::move( fn );
     }
 
+    void Client::handlerStart( int timeoutSeconds, std::function<void()> fn )
+    {
+        handlerCond.reset( );
+        handlerTimer = io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [this, fn]( )
+            { fn( ); handlerCond.notify( Result::Timeout ); } );
+    }
+
+    Result Client::handlerWait( )
+    {
+        return handlerCond.wait( );
+    }
+
     void Client::connect(
         int timeoutSeconds,
         ConnectFn fn )
@@ -374,21 +456,21 @@ namespace grim::net
         if ( isConnected )
             { io.post( [=, this]( ) { fn( addr, Result::Ok, "Ok" ); } ); return; }
 
-        cpp::AsyncTimer timeout = io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [=,this]( )
-            {
-                fn( addr, Result::Timeout, "Timeout" );
-                connectHandler = nullptr;
+        handlerStart( timeoutSeconds, [this, fn]()
+            { 
+                fn( addr, Result::Timeout, "Timeout" ); 
+                connectHandler = nullptr; 
             } );
         connectHandler = [=,this]( StrArg address, Result result, std::string reason )
             { 
                 if ( result == Result::Ok )
                 {
-                    cpp::AsyncTimer{ timeout }.cancel( );
+                    handlerTimer.cancel( );
                     fn( address, result, reason );
                 }
                 if ( addr.empty( ) )
                 {
-                    cpp::AsyncTimer{ timeout }.cancel( );
+                    handlerTimer.cancel( );
                     fn( addr, Result::Route, "Route" );
                 }
                 connectHandler = nullptr;
@@ -414,51 +496,129 @@ namespace grim::net
         return outResult == Result::Ok;
     }
 
-    void Client::auth(
-        int timeoutSeconds,
-        AuthFn )
+    void Client::auth( int timeoutSeconds, AuthFn fn )
     {
+        // if isReady, post result immediately
+        if ( isAuthed )
+            { io.post( [this, fn]( ) { fn( email, 0, Result::Ok ); } ); return; }
+
+        // start a timer that will return timeout if it elapses before the readyHandler is called
+        authHandler = std::move( fn );
+        handlerTimer = io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [this]( )
+            { authHandler( email, 0, Result::Timeout ); } );
     }
 
     bool Client::auth(
         int timeoutSeconds,
-        StrOut email,
-        uint64_t * sessionId,
+        StrOut emailOut,
+        uint64_t * sessionIdOut,
         Result * result )
     {
-        Result outResult = Result::Timeout;
-        return outResult == Result::Ok;
+        *result = Result::Ok;
+        if ( !isAuthed )
+        {
+            auto isAuthedCond = io.createCondition<Result>( );
+            authHandler = [&]( StrArg email, uint64_t sessionId, Result authResult )
+                { isAuthedCond.notify( authResult ); };
+            *result = isAuthedCond.wait( );
+        }
+        *emailOut = email;
+        *sessionIdOut = 0;
+
+        return *result == Result::Ok;
     }
 
     void Client::ready(
         int timeoutSeconds,
-        ReadyFn )
+        ReadyFn fn )
     {
+        // if isReady, post result immediately
+        if ( isReady )
+            { io.post( [this, fn]( ) { fn( Result::Ok ); } ); return; }
+
+        // start a timer that will return timeout if it elapses before the readyHandler is called
+        readyHandler = std::move( fn );
+        handlerTimer = io.waitFor( cpp::Duration::ofSeconds( timeoutSeconds ), [this]( )
+            { readyHandler( Result::Timeout ); } );
     }
 
     bool Client::ready(
         int timeoutSeconds,
         Result * result )
     {
-        Result outResult = Result::Timeout;
-        return outResult == Result::Ok;
+        *result = Result::Ok;
+        if ( !isReady )
+        {
+            auto isReadyCond = io.createCondition<Result>( );
+            readyHandler = [&]( Result readyResult )
+                { isReadyCond.notify( readyResult ); };
+            *result = isReadyCond.wait( );
+        }
+        return *result == Result::Ok;
     }
 
     void Client::send(
         uint64_t toSessionId,
-        uint16_t type,
+        uint8_t type,
         cpp::Memory data,
         BindFn bindFunction )
     {
+        uint16_t bind = 0;
+        if ( bindFunction )
+        {
+            while ( !bind || bindMap.count( bind ) ) { bind = bindIndex++; }
+            bindMap[bind] = std::move( bindFunction );
+        }
+
+        uint64_t t = cpp::Time::now( ).sinceEpoch( ).micros( );
+        uint16_t moniker = ( t & 0xffff ) ^ ( ( t >> 16 ) & 0xffff ) ^ ( ( t >> 32 ) & 0xffff ) ^ ( ( t >> 48 ) & 0xffff ) ^ bind;
+
+        assert( data.length( ) < 0xffff * 8 );
+        uint16_t len = (uint16_t)( ( data.length( ) + 7 ) / 8 );
+        size_t padding = ( 8 - ( data.length( ) % 8 ) ) % 8;
+
+        uint8_t result = 0;
+
+        auto request = cpp::StringBuffer::writeTo( 24 );
+        request.putBinary( len, ByteOrder );
+        request.putBinary( moniker, ByteOrder );
+        request.putBinary( bind, ByteOrder );
+        request.putBinary( type, ByteOrder );
+        request.putBinary( result, ByteOrder );
+        request.putBinary( toSessionId, ByteOrder );
+        request.putBinary( sessionId, ByteOrder );
+
+        tcp.send( request.getAll( ) );
+        tcp.send( data );
+        if ( padding )
+            { tcp.send( std::string( padding, '\0' ) ); }
     }
 
     void Client::send(
         uint64_t toSessionId,
+        uint16_t moniker,
         uint16_t bind,
-        uint16_t type,
-        uint16_t result,
+        uint8_t type,
+        uint8_t result,
         cpp::Memory data )
     {
+        assert( data.length( ) < 0xffff * 8 );
+        uint16_t len = (uint16_t)( ( data.length( ) + 7 ) / 8 );
+        size_t padding = ( 8 - ( data.length( ) % 8 ) ) % 8;
+
+        auto request = cpp::StringBuffer::writeTo( 24 );
+        request.putBinary( len, ByteOrder );
+        request.putBinary( moniker, ByteOrder );
+        request.putBinary( bind, ByteOrder );
+        request.putBinary( type, ByteOrder );
+        request.putBinary( result, ByteOrder );
+        request.putBinary( toSessionId, ByteOrder );
+        request.putBinary( sessionId, ByteOrder );
+
+        tcp.send( request.getAll( ) );
+        tcp.send( data );
+        if ( padding )
+            { tcp.send( std::string( padding, '\0' ) ); }
     }
 
     void Client::openUdp( uint16_t port )
@@ -476,6 +636,12 @@ namespace grim::net
     }
 
 
+    cpp::AsyncContext & Client::getAsyncContext( )
+    {
+        return io;
+    }
+
+
     ProxyApi::ProxyApi( Client & client )
         : m_client(client)
     {
@@ -483,9 +649,16 @@ namespace grim::net
 
     void ProxyApi::hello( auth::AuthToken authToken, HelloReply handler )
     {
-        cpp::StringBuffer request;
-        request.putBinary( authToken, ByteOrder );
+        auto request = cpp::StringBuffer::writeTo(256);
+        request.putBinary( authToken.value, ByteOrder );
 
+        // fake response
+        m_client.getAsyncContext( ).post( [handler]( ) 
+            { 
+                handler( Result::Ok, "placeholder@x.com", 1 );
+            } );
+
+        /*
         m_client.send( 0, (int)MessageType::Hello, request.getAll( ), [handler]( const Message & msg, StrArg data )
             {
                 Result result = toResult( msg.result );
@@ -498,15 +671,16 @@ namespace grim::net
                     reply.getBinary( email, ByteOrder );
                     reply.getBinary( sessionId, ByteOrder );
                 }
-                catch ( std::exception & e ) { result = Result::Unknown; }
+                catch ( std::exception & ) { result = Result::Unknown; }
 
                 handler( result, email, sessionId );
             } );
+        */
     }
 
     void ProxyApi::rello( uint64_t sessionId, RelloReply handler )
     {
-        cpp::StringBuffer request;
+        auto request = cpp::StringBuffer::writeTo( 256 );
         request.putBinary( sessionId, ByteOrder );
 
         m_client.send( 0, (int)MessageType::Rello, request.getAll( ), [handler]( const Message & msg, StrArg data )
@@ -518,7 +692,7 @@ namespace grim::net
 
     void ProxyApi::authServer( StrArg svcName, int nodeId, AuthServerReply handler )
     {
-        cpp::StringBuffer request;
+        auto request = cpp::StringBuffer::writeTo( 256 );
         request.putBinary( svcName, ByteOrder );
         request.putBinary( nodeId, ByteOrder );
 
@@ -534,7 +708,7 @@ namespace grim::net
                     reply.getBinary( email, ByteOrder );
                     reply.getBinary( sessionId, ByteOrder );
                 }
-                catch ( std::exception & e ) { result = Result::Unknown; }
+                catch ( std::exception & ) { result = Result::Unknown; }
 
                 handler( result, email, sessionId );
             } );
@@ -542,7 +716,7 @@ namespace grim::net
 
     void ProxyApi::findServer( StrArg svcName, int nodeId, FindServerReply handler )
     {
-        cpp::StringBuffer request;
+        auto request = cpp::StringBuffer::writeTo( 256 );
         request.putBinary( svcName, ByteOrder );
         request.putBinary( nodeId, ByteOrder );
 
@@ -556,7 +730,7 @@ namespace grim::net
                     cpp::DataBuffer reply{ data };
                     reply.getBinary( sessionId, ByteOrder );
                 }
-                catch ( std::exception & e ) { result = Result::Unknown; }
+                catch ( std::exception & ) { result = Result::Unknown; }
 
                 handler( result, sessionId );
             } );

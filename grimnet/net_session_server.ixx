@@ -51,19 +51,6 @@ export namespace grim::net
                                                 int timeoutSeconds,
                                                 Result * result ) override;
 
-        void                                onConnect( StrArg ip ) override;
-        void                                onDisconnect( StrArg ip ) override;
-
-        void                                onHello( StrArg ip, uint64_t authToken, int nodeId ) override;
-        void                                onRello( StrArg ip, uint64_t sessionId, int nodeId ) override;
-
-        void                                onAuth( StrArg ip, StrArg extIp, uint64_t authToken ) override;
-        void                                onReauth( StrArg ip, StrArg extIp, uint64_t sessionId ) override;
-        void                                onAuthServer( StrArg ip, uint64_t sessionId, StrArg svcName, int nodeId ) override;
-
-        void                                onLookupSession( StrArg ip, uint64_t sessionId ) override;
-        void                                onLookupServer( StrArg ip, StrArg svcName, int nodeId ) override;
-
         class                               Data;
         class                               Client;
 
@@ -71,15 +58,26 @@ export namespace grim::net
         void                                notifyAuthing( );
         void                                notifyAuth( );
         void                                notifyReady( );
-
+        // initialization
         void                                doAuthLogin( );
         void                                authLogin( grim::auth::Result result, grim::auth::AuthToken authToken );
         void                                doAuthReady( );
         void                                authReady( grim::auth::Result result );
         void                                doListen( );
+        // tcp handlers
         void                                connect( std::error_code acceptError, const std::string & addr );
         void                                receive( const std::string & addr, std::string & recvBuffer );
         void                                disconnect( const std::string & addr, std::error_code reason );
+        // request handlers
+        void                                onConnect( StrArg ip ) override;
+        void                                onDisconnect( StrArg ip ) override;
+        void                                onHello( StrArg ip, uint64_t authToken, int nodeId ) override;
+        void                                onRello( StrArg ip, uint64_t sessionId, int nodeId ) override;
+        void                                onAuth( StrArg ip, StrArg extIp, uint64_t authToken ) override;
+        void                                onReauth( StrArg ip, StrArg extIp, uint64_t sessionId ) override;
+        void                                onAuthServer( StrArg ip, uint64_t sessionId, StrArg svcName, int nodeId ) override;
+        void                                onLookupSession( StrArg ip, uint64_t sessionId ) override;
+        void                                onLookupServer( StrArg ip, StrArg svcName, int nodeId ) override;
 
     private:
         struct                              Detail;
@@ -87,32 +85,25 @@ export namespace grim::net
     };
 
     class SessionServer::Client
-        : ISessionServer::ClientApi
+        : public ISessionServer::ClientApi
     {
     public:
         Client( );
 
-        void                                open( cpp::AsyncContext & io, std::string config );
+        void                                open( cpp::AsyncContext & io, std::string addr, std::string authToken );
         void                                close( );
 
         void                                ready( int timeoutSeconds, net::ReadyFn );
 
-        using                               onAuth = std::function<void(
-                                                uint64_t sessionId,
-                                                net::Result result )>;
+    private:
+        void                                hello( uint64_t authToken, uint8_t nodeId ) override;
+        void                                rello( uint64_t sessionId ) override;
         void                                auth( uint64_t authToken, std::string extAddr, onAuth );
         void                                reauth( uint64_t sessionId, std::string extAddr, onAuth );
         void                                authServerNode( uint64_t sessionId, std::string svcName, int nodeId, onAuth );
+        void                                lookupSession( uint64_t sessionId, onLookupSession ) override;
+        void                                lookupServerNode( std::string svcName, int nodeId, onLookupServerNode ) override;
 
-        using                               onLookupSession = std::function<void(
-                                                uint64_t sessionId,
-                                                net::Result result )>;
-        void                                lookupSession( uint64_t sessionId, onLookupSession );
-
-        using                               onLookupServerNode = std::function<void(
-                                                uint64_t sessionId,
-                                                net::Result result )>;
-        void                                lookupServerNode( std::string svcName, int nodeId, onLookupServerNode );
 
     private:
         struct                              Detail;
@@ -456,7 +447,11 @@ namespace grim::net
             // this shouldn't happen
             break;
         case Result::Denied:
+            cpp::Log::notice( "Authentication denied by {}", detail->email );
+            break;
         case Result::Timeout:
+            // todo: is this correct?
+            doAuthLogin( );
             break;
         case Result::Retry:
             detail->io.waitFor( cpp::Duration::ofSeconds( 60 ), [this]( ) { doAuthLogin( ); } );
@@ -528,7 +523,7 @@ namespace grim::net
 
     }
 
-    void SessionServer::Client::open( cpp::AsyncContext & io, std::string config )
+    void SessionServer::Client::open( cpp::AsyncContext & io, std::string addr, std::string authToken )
     {
 
     }

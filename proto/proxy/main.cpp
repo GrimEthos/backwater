@@ -4,7 +4,6 @@
 import cpp.program;
 import cpp.windows;
 import cpp.asio;
-import proxy;
 import grim.net;
 
 int main( int argc, const char ** argv )
@@ -27,10 +26,16 @@ int main( int argc, const char ** argv )
         uint64_t sessionId = 0;
         if ( !sessionServer.auth( 5, &email, &sessionId, &result ) )
             { return 1; }
-
         if (!sessionServer.ready( 5, &result ))
             { return 1; }
 
+        grim::net::ProxyServer proxyServer[2];
+        proxyServer[0].open( io, "127.0.0.1:43210", "[::1]:43210", "[::1]:65432", "monkeysmarts@gmail.com", 0 );
+        proxyServer[1].open( io, "127.0.0.1:43211", "[::1]:43211", "[::1]:65432", "monkeysmarts@gmail.com", 1 );
+        if ( !proxyServer[0].auth( 5, &email, &sessionId, &result ) || !proxyServer[1].auth( 5, &email, &sessionId, &result ) )
+            { return 1; }
+        if ( !proxyServer[0].ready( 5, &result ) || !proxyServer[1].ready( 5, &result ) )
+            { return 1; }
 
         /*
         ProxyServer proxyServer[] =
@@ -42,13 +47,6 @@ int main( int argc, const char ** argv )
             { "proxyServer='localhost:3133,localhost:3134' svc.name = 'sample' svc.node = '0'" };
         SampleClient client =
             { "proxyServer='localhost:3133,localhost:3134'" };
-
-
-        cpp::windows::Kernel32::setConsoleCtrlHandler( [&]( DWORD dwCtrlType )
-        {
-            sessionServer.close( );
-            return true;
-        } );
         */
 
         /*
@@ -72,7 +70,7 @@ int main( int argc, const char ** argv )
         client.onAuthing( []( grim::net::StrArg addr, grim::net::StrArg access ) 
             { cpp::Log::info( "authing... " ); } );
         client.onAuth( []( grim::net::StrArg email, uint64_t sessionId, grim::net::Result result ) 
-            { cpp::Log::info( "auth. " ); } );
+            { cpp::Log::info( "auth: {}", email.view ); } );
         client.onReady( []( grim::net::Result result )
             {
                 cpp::Log::info( "ready. " );
@@ -82,9 +80,13 @@ int main( int argc, const char ** argv )
         client.open( io, "localhost:65432", "monkeysmarts@gmail.com", "[user access]" );
 
         std::string reason;
-
         std::string address;
+
         if ( !client.connect( 5, &address, &result, &reason ) )
+            { client.close( ); }
+        if ( !client.auth( 5, &email, &sessionId, &result ) )
+            { client.close( ); }
+        if ( !client.ready( 5, &result ) )
             { client.close( ); }
 
         /*
@@ -113,6 +115,7 @@ int main( int argc, const char ** argv )
         */
         cpp::windows::Kernel32::setConsoleCtrlHandler( [&]( DWORD dwCtrlType )
             {
+                cpp::Log::info( "ctrl+c" );
                 io.post( [&]( ) { client.close( ); } );
                 return true;
             } );

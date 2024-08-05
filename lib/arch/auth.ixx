@@ -59,6 +59,11 @@ export namespace grim::auth
                                                 int options,
                                                 int timeoutSeconds,
                                                 LoginFn ) = 0;
+
+        virtual cpp::AsyncCall               login(
+                                                AuthToken authToken,
+                                                int timeoutSeconds,
+                                                LoginFn ) = 0;
         //! authInit
         using                               authInitFn = std::function<void( Result )>;
         virtual void                        authInit(
